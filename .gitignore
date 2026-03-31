@@ -1,0 +1,106 @@
+# =========================
+# Python
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Environment variables
+.env
+.env.*
+
+# =========================
+# Jupyter Notebook
+# =========================
+.ipynb_checkpoints/
+
+# =========================
+# Logs & temp files
+# =========================
+logs/
+*.log
+*.out
+*.err
+tmp/
+temp/
+
+# =========================
+# Data (important for ML projects)
+# =========================
+datasets/
+*.csv
+*.parquet
+*.json
+*.pkl
+
+# If you want to keep small sample data, uncomment:
+# !data/sample/
+
+# =========================
+# Model artifacts
+# =========================
+artifacts/
+*.h5
+*.pt
+*.pth
+*.joblib
+*.sav
+
+# =========================
+# Spark
+# =========================
+metastore_db/
+spark-warehouse/
+*.crc
+
+# =========================
+# Kafka / Streaming
+# =========================
+kafka-logs/
+zookeeper/
+
+# =========================
+# Docker
+# =========================
+*.tar
+docker-compose.override.yml
+
+# =========================
+# IDE / Editor
+# =========================
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# =========================
+# OS files
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# Testing / Coverage
+# =========================
+.coverage
+htmlcov/
+.pytest_cache/
+
+# =========================
+# DVC (if you use it)
+# =========================
+.dvc/cache/
+.dvc/tmp/
+
+# =========================
+# Misc
+# =========================
+*.bak
+*.tmp
