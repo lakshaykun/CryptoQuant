@@ -4,6 +4,7 @@ CryptoQuant/
 ├── requirements.txt
 ├── docker-compose.yml
 ├── .env
+├── .gitignore
 │
 ├── configs/                  # central configs (VERY important)
 │   ├── kafka.yaml
@@ -11,10 +12,7 @@ CryptoQuant/
 │   ├── airflow.yaml
 │   └── model.yaml
 │
-├── data/                     # (optional local dev only)
-│   ├── raw/
-│   ├── processed/
-│   └── features/
+├── datasets/                     # (optional local dev only)
 │
 ├── pipelines/                # core data pipelines
 │   ├── streaming/
@@ -106,9 +104,13 @@ models/
 │   ├── loader.py          # read from Silver
 │   └── schema.py          # expected columns
 │
+├── features/
+│   ├── build_features.py      # feature engineering logic
+│   └── scaling.py             # normalization / scaling
 ├── training/
 │   ├── train.py
-│   └── trainer.py
+│   ├── trainer.py
+│   └── hyperparameter_tuning.py
 │
 ├── evaluation/
 │   ├── evaluate.py
@@ -124,3 +126,5 @@ models/
 │   └── model_loader.py
 │
 └── artifacts/
+    ├── models/                # saved models
+    └── scalers/

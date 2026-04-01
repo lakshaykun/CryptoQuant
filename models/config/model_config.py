@@ -51,4 +51,6 @@ MODEL_PARAMS = {
 }
 
 TEST_SPLIT_RATIO = 0.2
-MODEL_NAME = "crypto_price_model"
+MODEL_NAME = "model"
+
+MODEL_PATH = f"models/artifacts/models/{MODEL_NAME}.pkl"

@@ -1,4 +1,5 @@
 import joblib
+from models.config.model_config import MODEL_PATH
 from models.data.loader import load_silver_data
 from models.data.schema import validate_schema
 from models.data.splitter import time_split
@@ -17,7 +18,7 @@ def train_pipeline():
 
     evaluate_model(model, test_df)
 
-    joblib.dump(model, "models/artifacts/model.pkl")
+    joblib.dump(model, MODEL_PATH)
 
     print("✅ Training complete and model saved")
 
