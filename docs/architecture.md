@@ -33,15 +33,12 @@ CryptoQuant/
 │
 ├── medallion/               # data lake structure (Delta Lake)
 │   ├── bronze/
+│   │   ├── market/
+│   │   └── articles/
 │   ├── silver/
 │   └── gold/
 │
 ├── models/                  # ML logic
-│   ├── train.py
-│   ├── predict.py
-│   ├── evaluate.py
-│   ├── features.py
-│   └── registry.py         # MLflow integration
 │
 ├── notebooks/              # experimentation (optional)
 │   ├── eda.ipynb
