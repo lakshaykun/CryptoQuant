@@ -36,11 +36,11 @@ temp/
 # =========================
 # Data (important for ML projects)
 # =========================
-datasets/
-*.csv
-*.parquet
-*.json
-*.pkl
+# datasets/
+# *.csv
+# *.parquet
+# *.json
+# *.pkl
 
 # If you want to keep small sample data, uncomment:
 # !data/sample/
@@ -48,12 +48,12 @@ datasets/
 # =========================
 # Model artifacts
 # =========================
-artifacts/
-*.h5
-*.pt
-*.pth
-*.joblib
-*.sav
+# artifacts/
+# *.h5
+# *.pt
+# *.pth
+# *.joblib
+# *.sav
 
 # =========================
 # Spark

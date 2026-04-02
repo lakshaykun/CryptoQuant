@@ -11,4 +11,4 @@ if [[ -f "${VENV_ACTIVATE}" ]]; then
 fi
 
 cd "${ROOT_DIR}"
-exec python3 -m uvicorn api.app:app --host 0.0.0.0 --port 8000 --reload
+exec python3 -m uvicorn api.app:app --port 8000 --reload

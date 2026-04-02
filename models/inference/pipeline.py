@@ -7,8 +7,12 @@ class InferencePipeline:
 
     def run(self, df):
         X = df[FEATURE_COLUMNS]
+        if X.empty:
+            raise ValueError("No engineered feature rows provided")
         return self.model.predict(X)
     
     def runBase(self, df):
-        X = build_features(df)[FEATURE_COLUMNS].values
+        X = build_features(df)[FEATURE_COLUMNS]
+        if X.empty:
+            raise ValueError("Not enough rows to build features")
         return self.model.predict(X)

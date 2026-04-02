@@ -1,17 +1,19 @@
+from datetime import datetime
+
 from pydantic import BaseModel
 from typing import List
 
 
 class CryptoFeatures(BaseModel):
-    open_time: int
+    open_time: datetime
     open: float
     high: float
     low: float
     close: float
     volume: float
-    close_time: int
+    close_time: datetime
     quote_volume: float
-    symbol: str
+    symbol: str = "BTCUSDT"
     trades: int
     taker_buy_base: float
     taker_buy_quote: float
@@ -28,7 +30,7 @@ class CryptoEngineeredFeatures(BaseModel):
     volume: float
     trades: int
     taker_buy_base: float
-    symbol: str
+    symbol: str = "BTCUSDT"
 
     log_return: float
     volatility: float

@@ -12,29 +12,113 @@ Expected input columns
 
 Output columns
 --------------
-    timestamp, close, volume, trades, taker_buy_base, symbol,
+    close, volume, trades, taker_buy_base, symbol,
     log_return, volatility, imbalance_ratio, buy_ratio, vwap,
     log_return_lag1, log_return_lag2, buy_ratio_lag1,
     ma_5, ma_20, volatility_5, volume_5, buy_ratio_5,
     momentum, volume_spike, price_range_ratio, body_size,
-    hour, day_of_week, trend_strength, volatility_ratio,
-    target
+    hour, day_of_week, trend_strength, volatility_ratio
 """
 
 import numpy as np
 import pandas as pd
 
 
+REQUIRED_COLUMNS = [
+    "open_time",
+    "open",
+    "high",
+    "low",
+    "close",
+    "volume",
+    "close_time",
+    "quote_volume",
+    "trades",
+    "taker_buy_base",
+    "taker_buy_quote",
+    "symbol",
+]
+
+OUTPUT_COLUMNS = [
+    "close",
+    "volume",
+    "trades",
+    "taker_buy_base",
+    "symbol",
+    "log_return",
+    "volatility",
+    "imbalance_ratio",
+    "buy_ratio",
+    "vwap",
+    "log_return_lag1",
+    "log_return_lag2",
+    "buy_ratio_lag1",
+    "ma_5",
+    "ma_20",
+    "volatility_5",
+    "volume_5",
+    "buy_ratio_5",
+    "momentum",
+    "volume_spike",
+    "price_range_ratio",
+    "body_size",
+    "hour",
+    "day_of_week",
+    "trend_strength",
+    "volatility_ratio"
+]
+
+
+def _safe_divide(numerator: pd.Series, denominator: pd.Series) -> pd.Series:
+    denominator = denominator.replace(0, np.nan)
+    return numerator / denominator
+
+
+def _empty_output_frame() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "close": pd.Series(dtype="float64"),
+            "volume": pd.Series(dtype="float64"),
+            "trades": pd.Series(dtype="float64"),
+            "taker_buy_base": pd.Series(dtype="float64"),
+            "symbol": pd.Series(dtype="object"),
+            "log_return": pd.Series(dtype="float64"),
+            "volatility": pd.Series(dtype="float64"),
+            "imbalance_ratio": pd.Series(dtype="float64"),
+            "buy_ratio": pd.Series(dtype="float64"),
+            "vwap": pd.Series(dtype="float64"),
+            "log_return_lag1": pd.Series(dtype="float64"),
+            "log_return_lag2": pd.Series(dtype="float64"),
+            "buy_ratio_lag1": pd.Series(dtype="float64"),
+            "ma_5": pd.Series(dtype="float64"),
+            "ma_20": pd.Series(dtype="float64"),
+            "volatility_5": pd.Series(dtype="float64"),
+            "volume_5": pd.Series(dtype="float64"),
+            "buy_ratio_5": pd.Series(dtype="float64"),
+            "momentum": pd.Series(dtype="float64"),
+            "volume_spike": pd.Series(dtype="float64"),
+            "price_range_ratio": pd.Series(dtype="float64"),
+            "body_size": pd.Series(dtype="float64"),
+            "hour": pd.Series(dtype="float64"),
+            "day_of_week": pd.Series(dtype="float64"),
+            "trend_strength": pd.Series(dtype="float64"),
+            "volatility_ratio": pd.Series(dtype="float64"),
+        }
+    )[OUTPUT_COLUMNS]
+
+
 def add_base_features(df: pd.DataFrame) -> pd.DataFrame:
     """Compute per-bar derived features from raw OHLCV columns."""
     df = df.copy()
-    df["log_return"]       = np.log(df["close"] / df["open"])
-    df["volatility"]       = df["high"] - df["low"]
-    df["imbalance_ratio"]  = (
-        df["taker_buy_base"] - (df["volume"] - df["taker_buy_base"])
-    ) / df["volume"]
-    df["buy_ratio"]        = df["taker_buy_base"] / df["volume"]
-    df["vwap"]             = df["quote_volume"] / df["volume"]
+    price_ratio = _safe_divide(df["close"], df["open"])
+    df["log_return"] = np.log(price_ratio.where(price_ratio > 0))
+    df["volatility"] = df["high"] - df["low"]
+    df["imbalance_ratio"] = _safe_divide(
+        df["taker_buy_base"] - (df["volume"] - df["taker_buy_base"]),
+        df["volume"],
+    )
+    df["buy_ratio"] = _safe_divide(df["taker_buy_base"], df["volume"])
+    df["vwap"] = _safe_divide(df["quote_volume"], df["volume"])
     return df
 
 
@@ -74,28 +158,21 @@ def add_rolling_features(df: pd.DataFrame) -> pd.DataFrame:
 def add_derived_features(df: pd.DataFrame) -> pd.DataFrame:
     """Compute higher-order features that depend on base / rolling features."""
     df = df.copy()
-    df["momentum"]          = df["close"] - df["ma_5"]
-    df["volume_spike"]      = df["volume"] / df["volume_5"]
-    df["price_range_ratio"] = (df["high"] - df["low"]) / df["close"]
-    df["body_size"]         = (df["close"] - df["open"]) / df["close"]
-    df["trend_strength"]    = df["ma_5"] - df["ma_20"]
-    df["volatility_ratio"]  = df["volatility"] / df["volatility_5"]
+    df["momentum"] = df["close"] - df["ma_5"]
+    df["volume_spike"] = _safe_divide(df["volume"], df["volume_5"])
+    df["price_range_ratio"] = _safe_divide(df["high"] - df["low"], df["close"])
+    df["body_size"] = _safe_divide(df["close"] - df["open"], df["close"])
+    df["trend_strength"] = df["ma_5"] - df["ma_20"]
+    df["volatility_ratio"] = _safe_divide(df["volatility"], df["volatility_5"])
     return df
 
 
 def add_time_features(df: pd.DataFrame) -> pd.DataFrame:
     """Extract hour-of-day and day-of-week from open_time."""
     df = df.copy()
-    ts               = pd.to_datetime(df["open_time"])
-    df["hour"]        = ts.dt.hour
+    ts = pd.to_datetime(df["open_time"], errors="coerce")
+    df["hour"] = ts.dt.hour
     df["day_of_week"] = ts.dt.dayofweek   # Monday=0, Sunday=6
-    return df
-
-
-def add_target(df: pd.DataFrame) -> pd.DataFrame:
-    """Add the prediction target: next bar's log_return (lead by 1 per symbol)."""
-    df = df.copy()
-    df["target"] = df.groupby("symbol")["log_return"].shift(-1)
     return df
 
 
@@ -127,7 +204,17 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
     pd.DataFrame
         Silver-layer DataFrame with all engineered features and target column.
     """
-    # Sort by symbol then time before any windowed operation
+    if df.empty:
+        return _empty_output_frame()
+
+    missing_columns = [column for column in REQUIRED_COLUMNS if column not in df.columns]
+    if missing_columns:
+        raise ValueError(f"Missing required columns: {missing_columns}")
+
+    df = df.copy()
+    df["open_time"] = pd.to_datetime(df["open_time"], errors="coerce")
+
+    # Sort by symbol then time before any windowed operation.
     df = df.sort_values(["symbol", "open_time"]).reset_index(drop=True)
 
     df = add_base_features(df)
@@ -135,12 +222,16 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
     df = add_rolling_features(df)
     df = add_derived_features(df)
     df = add_time_features(df)
-    df = add_target(df)
 
     df = drop_raw_columns(df)
     df = drop_incomplete_rows(df)
 
     df = df.rename(columns={"open_time": "timestamp"})
+
+    if df.empty:
+        return _empty_output_frame()
+
+    df = df.reindex(columns=OUTPUT_COLUMNS)
 
     return df
 
