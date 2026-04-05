@@ -1,0 +1,8 @@
+topics:
+  - btc_reddit
+  - btc_yt
+  - btc_news
+
+partitions: 3
+replication_factor: 1
+retention_hours: 24

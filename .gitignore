@@ -106,3 +106,5 @@ htmlcov/
 # =========================
 *.bak
 *.tmp
+
+configs/app.env

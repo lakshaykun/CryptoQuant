@@ -1,0 +1,19 @@
+spark:
+  app_name: btc-sentiment-platform
+  master: local[*]
+
+delta:
+  bronze: delta/bronze
+  silver: delta/silver
+  gold: delta/gold
+
+checkpoints:
+  bronze: checkpoints/bronze
+  silver: checkpoints/silver
+  gold: checkpoints/gold
+
+kafka:
+  bootstrap_servers: localhost:9092
+  subscribe: btc_reddit,btc_yt,btc_news
+  starting_offsets: latest
+  fail_on_data_loss: false

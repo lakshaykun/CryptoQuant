@@ -37,7 +37,7 @@ huey==2.6.0
 idna==3.11
 importlib_metadata==8.7.1
 ipykernel==7.2.0
-ipython==9.12.0
+ipython==8.37.0
 ipython_pygments_lexers==1.1.1
 itsdangerous==2.2.0
 jedi==0.19.2
@@ -55,7 +55,7 @@ mlflow-skinny==3.10.1
 mlflow-tracing==3.10.1
 nest-asyncio==1.6.0
 numpy==2.4.4
-nvidia-nccl-cu12==2.29.7
+nvidia-nccl-cu12==2.29.7; platform_system == "Linux"
 opentelemetry-api==1.40.0
 opentelemetry-proto==1.40.0
 opentelemetry-sdk==1.40.0
@@ -109,3 +109,7 @@ wcwidth==0.6.0
 Werkzeug==3.1.7
 xgboost==3.2.0
 zipp==3.23.0
+feedparser>=6.0,<7.0
+redis>=5.0,<6.0
+kafka-python>=2.0,<3.0
+google-api-python-client>=2.137,<3.0
