@@ -15,21 +15,6 @@ CryptoQuant/
 ├── datasets/                     # (optional local dev only)
 │
 ├── pipelines/                # core data pipelines
-│   ├── streaming/
-│   │   ├── producer.py      # fetch crypto data (5 min)
-│   │   ├── kafka_producer.py
-│   │   ├── kafka_consumer.py
-│   │   └── spark_streaming.py   # main streaming job
-│   │
-│   ├── batch/
-│   │   ├── feature_engineering.py
-│   │   ├── data_validation.py
-│   │   └── aggregation.py
-│   │
-│   └── utils/
-│       ├── logger.py
-│       ├── helpers.py
-│       └── schema.py
 │
 ├── medallion/               # data lake structure (Delta Lake)
 │   ├── bronze/
@@ -125,3 +110,60 @@ models/
 └── artifacts/
     ├── models/                # saved models
     └── scalers/
+
+
+
+# Pipelines
+pipelines/
+│
+├── ingestion/                      # DATA ENTRY POINTS
+│   ├── batch/
+│   │   ├── market.py              # batch crypto ingestion pipeline
+│   │   ├── sentiment.py           # batch news/reddit ingestion
+│   │   ├── fetch_coins.py         # Binance downloader (your code)
+│   │   └── utils.py               # date utils, incremental logic
+│   │
+│   ├── streaming/
+│   │   ├── producer.py            # websocket → kafka
+│   │   ├── kafka_producer.py      # kafka producer wrapper
+│   │   ├── kafka_consumer.py      # kafka consumer (debug/testing)
+│   │   ├── spark_streaming.py     # main Spark streaming job
+│   │   └── schemas.py             # streaming JSON schema
+│
+├── bronze/                        # RAW DATA WRITING LAYER
+│   ├── market.py                 # write_to_bronze (your code)
+│   ├── sentiment.py              # write sentiment data
+│   ├── utils.py                  # merge helpers, partitioning
+│   └── schema.py                 # MARKET_SCHEMA (important)
+│
+├── silver/                        # CLEANED + STANDARDIZED DATA
+│   ├── market.py                 # cleaning, dedup, casting
+│   ├── sentiment.py              # NLP cleaning
+│   ├── joins.py                  # merge market + sentiment
+│   └── utils.py                  # validation helpers
+│
+├── gold/                          # FEATURE ENGINEERING
+│   ├── market_features.py        # returns, volatility, indicators
+│   ├── sentiment_features.py     # sentiment scores aggregation
+│   ├── feature_store.py          # final ML-ready dataset
+│   └── utils.py
+│
+├── orchestration/                 # PIPELINE EXECUTION LOGIC
+│   ├── batch_pipeline.py         # bronze → silver → gold (batch)
+│   ├── streaming_pipeline.py     # streaming end-to-end
+│   └── scheduler.py              # cron / airflow hooks
+│
+├── validation/                    # DATA QUALITY (VERY IMPORTANT)
+│   ├── market.py                 # schema + null checks
+│   ├── sentiment.py
+│   └── expectations.py           # reusable rules
+│
+├── state/                         # INCREMENTAL STATE MANAGEMENT
+│   ├── market_state.py           # last timestamp logic
+│   └── state_store.py            # file/db abstraction
+│
+└── utils/                         # SHARED UTILITIES
+    ├── logger.py
+    ├── config_loader.py          # load YAML configs
+    ├── spark.py                  # Spark session builder
+    └── helpers.py

@@ -1,0 +1,27 @@
+# configs/spark.yaml
+
+app_name: CryptoQuant
+
+master: local[*]
+
+spark_configs:
+  # Delta Lake
+  spark.sql.extensions: io.delta.sql.DeltaSparkSessionExtension
+  spark.sql.catalog.spark_catalog: org.apache.spark.sql.delta.catalog.DeltaCatalog
+
+  # Performance (local optimized)
+  spark.sql.shuffle.partitions: 8
+  spark.default.parallelism: 8
+
+  # Adaptive Query Execution
+  spark.sql.adaptive.enabled: true
+  spark.sql.adaptive.coalescePartitions.enabled: true
+
+  # Storage
+  spark.sql.warehouse.dir: /tmp/spark-warehouse
+
+  # Arrow (faster pandas ↔ spark)
+  spark.sql.execution.arrow.pyspark.enabled: true
+
+  # Logging / Debugging
+  spark.ui.enabled: true
