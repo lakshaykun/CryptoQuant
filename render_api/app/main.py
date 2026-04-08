@@ -1,4 +1,4 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect, Query
 import asyncio
 
 from .binance_ws import stream_binance
@@ -8,10 +8,9 @@ from .config import DEFAULT_SYMBOLS, DEFAULT_STREAM
 app = FastAPI(title="CryptoQuant Render Producer")
 
 
-@app.get("/")
-def health():
+@app.api_route("/", methods=["GET", "HEAD"])
+def health(request: Request):
     return {"status": "ok"}
-
 
 @app.websocket("/ws/binance")
 async def websocket_endpoint(
@@ -37,8 +36,7 @@ async def websocket_endpoint(
 
     try:
         while True:
-            # keep connection alive
-            await websocket.receive_text()
+            await asyncio.sleep(1)
 
     except WebSocketDisconnect:
         print("[Client] Disconnected")
