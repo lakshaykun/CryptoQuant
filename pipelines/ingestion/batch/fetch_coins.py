@@ -6,7 +6,6 @@ import io
 import pandas as pd
 from datetime import timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from configs.data import INTERVAL, START_DATE
 
 BASE_URL = "https://data.binance.vision/data/spot/daily/klines"
 
@@ -85,7 +84,7 @@ def fetch_single_day(symbol, interval, single_date, logger):
 # -----------------------------
 # Parallel downloader
 # -----------------------------
-def fetch_coins_data(symbols, interval, start_date, end_date, logger):
+def fetch_coins_data(symbols, interval, start_date_symbols: dict, end_date, logger):
     tasks = []
     results = []
 
@@ -93,7 +92,7 @@ def fetch_coins_data(symbols, interval, start_date, end_date, logger):
 
         # Submit all jobs
         for symbol in symbols:
-            for single_date in daterange(start_date, end_date):
+            for single_date in daterange(start_date_symbols[symbol], end_date):
                 tasks.append(
                     executor.submit(fetch_single_day, symbol, interval, single_date, logger)
                 )

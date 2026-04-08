@@ -3,5 +3,4 @@
 from pipelines.orchestration.batch_pipeline import run_batch_pipeline
 
 if __name__ == "__main__":
-    symbols = ["BTCUSDT", "ETHUSDT"]
-    run_batch_pipeline(symbols)
+    run_batch_pipeline()

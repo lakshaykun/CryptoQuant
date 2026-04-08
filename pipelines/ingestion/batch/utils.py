@@ -1,29 +1,35 @@
 # pipelines/ingestion/batch/utils.py
 
 from pyspark.sql import functions as F
-from datetime import timedelta
 
-def get_last_ingested_timestamp(spark, path, logger):
+def get_last_ingested_timestamp(spark, path, logger, symbols, start_date):
     try:
         df = spark.read.format("delta").load(path)
 
-        result = df.select(F.max("open_time").alias("max_time")).collect()[0]
+        # Filter only required symbols (important for performance)
+        df = df.filter(F.col("symbol").isin(symbols))
 
-        if result["max_time"] is None:
-            return None
+        # Get max timestamp per symbol
+        result_df = (
+            df.groupBy("symbol")
+              .agg(F.max("open_time").alias("max_time"))
+        )
 
-        return result["max_time"]
+        # Convert to dict: symbol -> timestamp
+        result = {
+            row["symbol"]: row["max_time"]
+            for row in result_df.collect()
+            if row["max_time"] is not None
+        }
+
+        # Ensure all symbols exist in output (even if no data)
+        for symbol in symbols:
+            if symbol not in result:
+                result[symbol] = start_date
+
+        return result
 
     except Exception as e:
         logger.warning(f"No existing bronze data found: {e}")
-        return None
-    
-def interval_to_timedelta(interval: str):
-    if interval.endswith("m"):
-        return timedelta(minutes=int(interval[:-1]))
-    elif interval.endswith("h"):
-        return timedelta(hours=int(interval[:-1]))
-    elif interval.endswith("d"):
-        return timedelta(days=int(interval[:-1]))
-    else:
-        raise ValueError(f"Unsupported interval: {interval}")
+        return {symbol: start_date for symbol in symbols}
+

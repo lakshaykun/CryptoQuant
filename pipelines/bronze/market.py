@@ -3,7 +3,7 @@
 import pandas
 from pyspark.sql import functions as F
 from delta.tables import DeltaTable
-from pipelines.utils.schema import RAW_MARKET_SCHEMA, BRONZE_MARKET_SCHEMA
+from pipelines.utils.schema import RAW_MARKET_SCHEMA
 
 
 def write_to_bronze(pdf: pandas.DataFrame, spark, path, logger, source = "stream"):

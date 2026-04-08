@@ -1,0 +1,10 @@
+# configs/data.yaml
+
+interval: "5m"
+start_date: "2026-04-01"
+
+bronze_market_path: "medallion/bronze/market/"
+silver_market_path: "medallion/silver/market/"
+gold_market_path: "medallion/gold/market/"
+
+symbols: ["BTCUSDT", "ETHUSDT"]

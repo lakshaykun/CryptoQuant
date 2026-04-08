@@ -13,9 +13,9 @@ def get_spark():
 
     return spark
 
-def load_silver_data():
+def load_data():
     spark = get_spark()
 
-    df = spark.read.format("delta").load("medallion/silver/market")
+    df = spark.read.format("delta").load("medallion/gold/market")
 
     return df.toPandas()
