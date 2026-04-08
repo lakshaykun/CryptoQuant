@@ -35,6 +35,9 @@ case "$ACTION" in
 	pull)
 		make pipeline-pull "$@"
 		;;
+	reset-data)
+		make pipeline-reset-data "$@"
+		;;
 	clean)
 		make pipeline-clean "$@"
 		;;
@@ -44,7 +47,7 @@ case "$ACTION" in
 	*)
 		echo "Unknown command: $ACTION"
 		echo
-		echo "Usage: ./run_pipeline.sh [up|down|restart|logs|status|build|pull|clean|help]"
+		echo "Usage: ./run_pipeline.sh [up|down|restart|logs|status|build|pull|reset-data|clean|help]"
 		exit 1
 		;;
 esac

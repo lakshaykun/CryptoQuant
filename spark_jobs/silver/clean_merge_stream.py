@@ -1,64 +1,18 @@
-import os
-import sys
-import json
-import shutil
-from pathlib import Path
+from spark_jobs.common.runtime_env import configure_pyspark_python
 
-os.environ["PYSPARK_PYTHON"] = sys.executable
-os.environ["PYSPARK_DRIVER_PYTHON"] = sys.executable
-
-
-def _delta_table_id(delta_path: str) -> str | None:
-    log_dir = Path(delta_path) / "_delta_log"
-    if not log_dir.exists():
-        return None
-
-    for log_file in sorted(log_dir.glob("*.json")):
-        try:
-            for line in log_file.read_text(encoding="utf-8").splitlines():
-                payload = json.loads(line)
-                metadata = payload.get("metaData")
-                if isinstance(metadata, dict):
-                    table_id = metadata.get("id")
-                    if table_id:
-                        return str(table_id)
-        except Exception:
-            continue
-
-    return None
-
-
-def _checkpoint_delta_table_id(checkpoint_path: str) -> str | None:
-    metadata_file = Path(checkpoint_path) / "metadata"
-    if not metadata_file.exists():
-        return None
-
-    try:
-        metadata = json.loads(metadata_file.read_text(encoding="utf-8"))
-    except Exception:
-        return None
-
-    table_id = metadata.get("id")
-    return str(table_id) if table_id else None
-
-
-def _reset_stale_checkpoint(source_path: str, checkpoint_path: str) -> None:
-    current_source_id = _delta_table_id(source_path)
-    current_checkpoint_id = _checkpoint_delta_table_id(checkpoint_path)
-
-    if not current_checkpoint_id or not current_source_id:
-        return
-
-    if current_checkpoint_id != current_source_id:
-        shutil.rmtree(checkpoint_path, ignore_errors=True)
+configure_pyspark_python()
 
 from pyspark.sql.functions import (
+    coalesce,
     col,
+    from_unixtime,
     from_json,
     length,
     lower,
     regexp_replace,
-    to_timestamp
+    trim,
+    to_timestamp,
+    when,
 )
 from pyspark.sql.types import (
     StructType,
@@ -67,6 +21,13 @@ from pyspark.sql.types import (
     IntegerType
 )
 
+from spark_jobs.common.checkpoint import reset_stale_checkpoint
+from spark_jobs.common.job_runtime import (
+    await_query,
+    configure_job_logging,
+    log_stream_schema,
+    start_delta_query,
+)
 from utils.spark_utils import create_delta_spark_session
 from utils.spark_config import (
     get_checkpoint_path,
@@ -81,10 +42,6 @@ SILVER_CHECKPOINT_ROOT = get_checkpoint_path("silver", "checkpoints/silver")
 SILVER_CHECKPOINT_PATH = f"{SILVER_CHECKPOINT_ROOT.rstrip('/')}/clean_merge_stream"
 APP_NAME = f"{get_spark_app_name()}-silver"
 
-_reset_stale_checkpoint(BRONZE_DELTA_PATH, SILVER_CHECKPOINT_PATH)
-
-spark = create_delta_spark_session(APP_NAME, master=get_spark_master())
-
 schema = StructType([
     StructField("id", StringType()),
     StructField("timestamp", StringType()),
@@ -94,47 +51,112 @@ schema = StructType([
     StructField("symbol", StringType())
 ])
 
-bronze_stream = (
-    spark.readStream
-    .format("delta")
-    .load(BRONZE_DELTA_PATH)
-)
 
-parsed = (
-    bronze_stream
-    .select(from_json(col("raw_json"), schema).alias("data"))
-    .select("data.*")
-)
+def build_parsed_stream():
+    spark = create_delta_spark_session(APP_NAME, master=get_spark_master())
+    bronze_stream = (
+        spark.readStream
+        .format("delta")
+        .load(BRONZE_DELTA_PATH)
+    )
 
-cleaned = (
-    parsed
-    .filter(col("text").isNotNull())
-    .withColumn("text", lower(col("text")))
-    .withColumn("text", regexp_replace("text", r"http\S+", ""))
-    .withColumn("text", regexp_replace("text", r"[@#]\w+", ""))
-    .withColumn("event_time", to_timestamp("timestamp"))
-)
-
-validated = (
-    cleaned
-    .filter(length(col("text")) > 20)
-    .filter(~col("text").rlike("(?i)100x|free money|pump signal|join now"))
-    .filter(~col("text").rlike("(?i)whatsapp group|telegram signal"))
-)
-print("Starting silver layer streaming query...")
-print("Schema of cleaned stream:")
-validated.printSchema()
-# Streaming DataFrames do not support batch actions like show().
-# Use a console sink query separately for debugging if needed.
+    return (
+        bronze_stream
+        .select(from_json(col("raw_json"), schema).alias("data"))
+        .select("data.*")
+    )
 
 
-query = (
-    validated.writeStream
-    .format("delta")
-    .outputMode("append")
-    .option("checkpointLocation", SILVER_CHECKPOINT_PATH)
-    .start(SILVER_DELTA_PATH)
-)
+def clean_stream(parsed_stream):
+    # Normalize noisy social/media text into stable NLP-ready tokens.
+    cleaned = (
+        parsed_stream
+        .filter(col("text").isNotNull())
+        .withColumn("text", regexp_replace("text", r"<[^>]+>", " "))
+        .withColumn("text", regexp_replace("text", r"&amp;", " & "))
+        .withColumn("text", regexp_replace("text", r"&lt;", " < "))
+        .withColumn("text", regexp_replace("text", r"&gt;", " > "))
+        .withColumn("text", regexp_replace("text", r"&(quot|#34);", " \" "))
+        .withColumn("text", regexp_replace("text", r"&#39;", " ' "))
+        .withColumn("text", lower(col("text")))
+        .withColumn("text", regexp_replace("text", r"https?://\S+|www\.\S+", " "))
+        .withColumn("text", regexp_replace("text", r"@(\w+)", " "))
+        .withColumn("text", regexp_replace("text", r"#(\w+)", "$1"))
+        .withColumn("text", regexp_replace("text", r"[^a-z0-9$%+\-\s]", " "))
+        .withColumn("text", regexp_replace("text", r"\s+", " "))
+        .withColumn("text", trim(col("text")))
+        .withColumn("source_norm", lower(trim(col("source"))))
+        .withColumn(
+            "text",
+            when(
+                col("source_norm") == "reddit",
+                regexp_replace(
+                    regexp_replace(col("text"), r"\b([ru])/\w+\b", " "),
+                    r"\b(removed|deleted)\b",
+                    " ",
+                ),
+            ).otherwise(col("text")),
+        )
+        .withColumn(
+            "text",
+            when(
+                col("source_norm") == "youtube",
+                regexp_replace(
+                    regexp_replace(col("text"), r"\b\d{1,2}:\d{2}(?::\d{2})?\b", " "),
+                    r"\[[^\]]+\]",
+                    " ",
+                ),
+            ).otherwise(col("text")),
+        )
+        .withColumn(
+            "text",
+            when(
+                col("source_norm") == "news",
+                regexp_replace(
+                    regexp_replace(col("text"), r"\b(source|via)\s*:\s*\S+", " "),
+                    r"\b(read more|continue reading)\b.*$",
+                    " ",
+                ),
+            ).otherwise(col("text")),
+        )
+        .withColumn("text", regexp_replace("text", r"\s+", " "))
+        .withColumn("text", trim(col("text")))
+        .withColumn(
+            "event_time",
+            coalesce(
+                to_timestamp(col("timestamp")),
+                to_timestamp(from_unixtime(col("timestamp").cast("double"))),
+                to_timestamp(from_unixtime((col("timestamp").cast("double") / 1000.0))),
+            ),
+        )
+        .drop("source_norm")
+    )
+
+    return (
+        cleaned
+        .filter(col("event_time").isNotNull())
+        .filter(length(col("text")) > 20)
+        .filter(~col("text").rlike("(?i)100x|free money|pump signal|join now"))
+        .filter(~col("text").rlike("(?i)whatsapp group|telegram signal"))
+    )
 
 
-query.awaitTermination()
+def run() -> None:
+    configure_job_logging()
+    reset_stale_checkpoint(BRONZE_DELTA_PATH, SILVER_CHECKPOINT_PATH)
+
+    parsed_stream = build_parsed_stream()
+    validated_stream = clean_stream(parsed_stream)
+    log_stream_schema(validated_stream, "silver_validated_stream")
+
+    query = start_delta_query(
+        validated_stream,
+        output_path=SILVER_DELTA_PATH,
+        checkpoint_path=SILVER_CHECKPOINT_PATH,
+        query_name=f"{APP_NAME}-write",
+    )
+    await_query(query)
+
+
+if __name__ == "__main__":
+    run()

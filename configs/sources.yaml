@@ -17,6 +17,10 @@ reddit:
     - BTCUSD
     - breakout
     - crash
+  engagement_weights:
+    score: 0.45
+    upvote_ratio: 0.35
+    comments: 0.20
 
 youtube:
   channel_ids:
@@ -43,3 +47,7 @@ news:
     - https://news.bitcoin.com/feed/
   currency: BTC
   interval_seconds: 300
+  engagement_weights:
+    comments: 0.45
+    keywords: 0.25
+    recency: 0.30

@@ -1,6 +1,6 @@
 import time
 import os
-from ingestion.youtube.fetch_latest_video import get_recent_video_ids
+from ingestion.youtube.fetch_latest_video import get_recent_video_ids, get_recent_video_ids_for_channel
 from ingestion.youtube.fetch_comments import fetch_video_comments
 from ingestion.common.redis_dedup import is_duplicate, add_to_bloom
 from ingestion.common.kafka_producer import send
@@ -19,12 +19,13 @@ def _configured_playlists() -> list[str]:
     section = get_sources_section("youtube")
 
     explicit_playlists = get_list_value(section, "upload_playlists", [])
-    explicit_playlists = [item for item in explicit_playlists if not item.startswith("PLAYLIST_ID")]
-    if explicit_playlists:
-        return explicit_playlists
+    return [item for item in explicit_playlists if not item.startswith("PLAYLIST_ID")]
 
+
+def _configured_channels() -> list[str]:
+    section = get_sources_section("youtube")
     channel_ids = get_list_value(section, "channel_ids", DEFAULT_TARGET_CHANNEL_IDS)
-    return [cid.replace('UC', 'UU', 1) for cid in channel_ids]
+    return [cid for cid in channel_ids if cid.startswith("UC")]
 
 
 def poll_youtube():
@@ -35,9 +36,19 @@ def poll_youtube():
         print(f"Invalid YOUTUBE_MAX_VIDEOS_PER_CHANNEL={raw_max_videos!r}, defaulting to 5")
         max_videos_per_channel = 5
 
-    for playlist_id in _configured_playlists():
-        video_ids = get_recent_video_ids(playlist_id, max_results=max_videos_per_channel)
-        print(f"Fetched {len(video_ids)} video IDs for playlist {playlist_id}: {video_ids}")
+    explicit_playlists = _configured_playlists()
+    if explicit_playlists:
+        targets = [("playlist", value) for value in explicit_playlists]
+    else:
+        targets = [("channel", value) for value in _configured_channels()]
+
+    for target_kind, target_value in targets:
+        if target_kind == "playlist":
+            video_ids = get_recent_video_ids(target_value, max_results=max_videos_per_channel)
+            print(f"Fetched {len(video_ids)} video IDs for playlist {target_value}: {video_ids}")
+        else:
+            video_ids = get_recent_video_ids_for_channel(target_value, max_results=max_videos_per_channel)
+            print(f"Fetched {len(video_ids)} video IDs for channel {target_value}: {video_ids}")
 
         if not video_ids:
             continue

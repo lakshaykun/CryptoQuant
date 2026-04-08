@@ -1,7 +1,10 @@
 import requests
 import time
+from ingestion.common.engagement_utils import normalized_weights
 from ingestion.common.redis_dedup import is_duplicate, add_to_bloom
 from ingestion.common.kafka_producer import send
+from ingestion.common.schemas import normalize_event
+from utils.number_utils import percent, to_float, to_int
 from utils.source_config import get_list_value, get_sources_section
 
 # Expanded subreddit list
@@ -17,6 +20,33 @@ HEADERS = {
     "User-Agent": "btc-sentiment-ingestion/1.0"
 }
 
+DEFAULT_REDDIT_ENGAGEMENT_WEIGHTS = {
+    "score": 0.45,
+    "upvote_ratio": 0.35,
+    "comments": 0.20,
+}
+
+def _reddit_engagement_weights(section: dict) -> dict[str, float]:
+    raw = section.get("engagement_weights", {})
+    if not isinstance(raw, dict):
+        return DEFAULT_REDDIT_ENGAGEMENT_WEIGHTS.copy()
+    return normalized_weights(raw, DEFAULT_REDDIT_ENGAGEMENT_WEIGHTS)
+
+
+def _engagement_score(post: dict, total_score: int, total_comments: int, weights: dict[str, float]) -> int:
+    # Mirror the YouTube approach with a composite percentage score.
+    score_pct = percent(to_int(post.get("score", 0)), total_score)
+    comments_pct = percent(to_int(post.get("num_comments", 0)), total_comments)
+    upvote_pct = max(0.0, min(to_float(post.get("upvote_ratio", 0.0)) * 100.0, 100.0))
+
+    # Weighting: upvotes and score matter most, comments provide depth signal.
+    engagement = (
+        (weights["score"] * score_pct)
+        + (weights["upvote_ratio"] * upvote_pct)
+        + (weights["comments"] * comments_pct)
+    )
+    return max(0, int(round(engagement)))
+
 def fetch_reddit():
     """
     Scrapes Reddit using the JSON API while maintaining 
@@ -25,6 +55,7 @@ def fetch_reddit():
     section = get_sources_section("reddit")
     subreddits = get_list_value(section, "subreddits", DEFAULT_SUBREDDITS)
     keywords = get_list_value(section, "keywords", DEFAULT_KEYWORDS)
+    weights = _reddit_engagement_weights(section)
 
     for sub in subreddits:
         for keyword in keywords:
@@ -45,28 +76,30 @@ def fetch_reddit():
 
                 data = response.json()
                 posts = data.get("data", {}).get("children", [])
+                post_data = [obj.get("data", {}) for obj in posts if isinstance(obj, dict)]
 
-                for post_obj in posts:
-                    post = post_obj["data"]
+                total_score = sum(to_int(post.get("score", 0)) for post in post_data)
+                total_comments = sum(to_int(post.get("num_comments", 0)) for post in post_data)
+
+                for post in post_data:
                     post_id = post["id"]
 
-                    # Original Deduplication Logic
                     if is_duplicate(post_id):
                         continue
 
-                    # Original Payload Format
                     payload = {
                         "id": post_id,
                         "timestamp": str(post["created_utc"]),
                         "source": "reddit",
                         "text": f"{post['title']} {post.get('selftext', '')}",
-                        "engagement": post["score"],
+                        "engagement": _engagement_score(post, total_score, total_comments, weights),
                         "symbol": "BTC"
                     }
-                    print(payload)  # For debugging
+                    try:
+                        payload = normalize_event(payload)
+                    except ValueError:
+                        continue
                     
-
-                    # Original Ingestion Logic
                     send("btc_reddit", payload)
                     add_to_bloom(post_id)
 
@@ -80,7 +113,7 @@ def fetch_reddit():
 def run_forever():
     while True:
         fetch_reddit()
-        print("pulling messages from youtube...")
+        print("pulling messages from reddit...")
         time.sleep(300)
 
 

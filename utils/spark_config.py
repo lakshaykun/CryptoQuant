@@ -10,6 +10,12 @@ DEFAULT_SPARK_CONFIG: dict[str, Any] = {
 		"app_name": "btc-sentiment-platform",
 		"master": "local[*]",
 	},
+	"gold": {
+		"window_seconds": 300,
+		"watermark_seconds": 600,
+		"sentiment_endpoint": "http://127.0.0.1:8000/predict",
+		"sentiment_timeout_seconds": 10,
+	},
 	"delta": {
 		"bronze": "delta/bronze",
 		"silver": "delta/silver",
@@ -41,12 +47,13 @@ def load_spark_config(path: str | Path = "configs/spark.yaml") -> dict[str, Any]
 
 	merged = {
 		"spark": dict(DEFAULT_SPARK_CONFIG["spark"]),
+		"gold": dict(DEFAULT_SPARK_CONFIG["gold"]),
 		"delta": dict(DEFAULT_SPARK_CONFIG["delta"]),
 		"checkpoints": dict(DEFAULT_SPARK_CONFIG["checkpoints"]),
 		"kafka": dict(DEFAULT_SPARK_CONFIG["kafka"]),
 	}
 
-	for section in ("spark", "delta", "checkpoints", "kafka"):
+	for section in ("spark", "gold", "delta", "checkpoints", "kafka"):
 		candidate = loaded.get(section, {})
 		if isinstance(candidate, dict):
 			merged[section].update(candidate)
@@ -69,6 +76,38 @@ def get_spark_app_name(default: str = "btc-sentiment-platform") -> str:
 def get_spark_master(default: str = "local[*]") -> str:
 	master = str(_section("spark").get("master", default)).strip()
 	return master or default
+
+
+def get_gold_window_seconds(default: int = 300) -> int:
+	value = _section("gold").get("window_seconds", default)
+	try:
+		seconds = int(value)
+		return seconds if seconds > 0 else default
+	except (TypeError, ValueError):
+		return default
+
+
+def get_gold_watermark_seconds(default: int = 600) -> int:
+	value = _section("gold").get("watermark_seconds", default)
+	try:
+		seconds = int(value)
+		return seconds if seconds > 0 else default
+	except (TypeError, ValueError):
+		return default
+
+
+def get_gold_sentiment_endpoint(default: str = "http://127.0.0.1:8000/predict") -> str:
+	endpoint = str(_section("gold").get("sentiment_endpoint", default)).strip()
+	return endpoint or default
+
+
+def get_gold_sentiment_timeout_seconds(default: int = 10) -> int:
+	value = _section("gold").get("sentiment_timeout_seconds", default)
+	try:
+		seconds = int(value)
+		return seconds if seconds > 0 else default
+	except (TypeError, ValueError):
+		return default
 
 
 def get_delta_path(layer: str, default: str) -> str:

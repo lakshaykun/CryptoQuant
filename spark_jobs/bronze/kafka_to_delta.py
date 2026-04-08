@@ -1,9 +1,10 @@
-import os
-import sys
+from spark_jobs.common.runtime_env import configure_pyspark_python
 
-os.environ["PYSPARK_PYTHON"] = sys.executable
-os.environ["PYSPARK_DRIVER_PYTHON"] = sys.executable
+configure_pyspark_python()
 
+from pyspark.sql import DataFrame
+
+from spark_jobs.common.job_runtime import await_query, configure_job_logging, start_delta_query
 from utils.spark_utils import create_delta_spark_session
 from utils.spark_config import (
     get_checkpoint_path,
@@ -21,38 +22,48 @@ KAFKA_STARTING_OFFSETS = get_kafka_option("starting_offsets", "latest")
 KAFKA_FAIL_ON_DATA_LOSS = get_kafka_option("fail_on_data_loss", "false")
 APP_NAME = f"{get_spark_app_name()}-bronze"
 
-spark = create_delta_spark_session(
-    APP_NAME,
-    include_kafka=True,
-    master=get_spark_master(),
-)
 
-bronze_df = (
-    spark.readStream
-    .format("kafka")
-    .option("kafka.bootstrap.servers", KAFKA_BOOTSTRAP_SERVERS)
-    .option("subscribe", KAFKA_SUBSCRIBE_TOPICS)
-    .option("startingOffsets", KAFKA_STARTING_OFFSETS)
-    .option("failOnDataLoss", KAFKA_FAIL_ON_DATA_LOSS)
-    .load()
-)
+def build_kafka_stream() -> DataFrame:
+    spark = create_delta_spark_session(
+        APP_NAME,
+        include_kafka=True,
+        master=get_spark_master(),
+    )
 
-raw_events = bronze_df.selectExpr(
-    "CAST(value AS STRING) as raw_json",
-    "topic",
-    "partition",
-    "offset",
-    "timestamp as kafka_timestamp"
-)
-
-query = (
-    raw_events.writeStream
-    .format("delta")
-    .outputMode("append")
-    .option("checkpointLocation", BRONZE_CHECKPOINT_PATH)
-    .start(BRONZE_DELTA_PATH)
-)
-  
+    return (
+        spark.readStream
+        .format("kafka")
+        .option("kafka.bootstrap.servers", KAFKA_BOOTSTRAP_SERVERS)
+        .option("subscribe", KAFKA_SUBSCRIBE_TOPICS)
+        .option("startingOffsets", KAFKA_STARTING_OFFSETS)
+        .option("failOnDataLoss", KAFKA_FAIL_ON_DATA_LOSS)
+        .load()
+    )
 
 
-query.awaitTermination()
+def build_raw_events_stream(kafka_df: DataFrame) -> DataFrame:
+    return kafka_df.selectExpr(
+        "CAST(value AS STRING) as raw_json",
+        "topic",
+        "partition",
+        "offset",
+        "timestamp as kafka_timestamp",
+    )
+
+
+def run() -> None:
+    configure_job_logging()
+    kafka_df = build_kafka_stream()
+    raw_events = build_raw_events_stream(kafka_df)
+
+    query = start_delta_query(
+        raw_events,
+        output_path=BRONZE_DELTA_PATH,
+        checkpoint_path=BRONZE_CHECKPOINT_PATH,
+        query_name=f"{APP_NAME}-write",
+    )
+    await_query(query)
+
+
+if __name__ == "__main__":
+    run()
