@@ -1,0 +1,40 @@
+import json
+import asyncio
+import websockets
+from .config import BASE_BINANCE_WS, RECONNECT_DELAY
+
+
+def build_stream_url(symbols, stream_type):
+    streams = "/".join([f"{s.lower()}@{stream_type}" for s in symbols])
+    return f"{BASE_BINANCE_WS}?streams={streams}"
+
+
+async def stream_binance(symbols, stream_type, send_callback):
+    url = build_stream_url(symbols, stream_type)
+
+    while True:
+        try:
+            async with websockets.connect(url, ping_interval=20, ping_timeout=20) as ws:
+                print(f"[Binance] Connected → {url}")
+
+                while True:
+                    message = await ws.recv()
+                    data = json.loads(message)
+
+                    # Normalize data (important for downstream)
+                    if "data" in data:
+                        d = data["data"]
+                        cleaned = {
+                            "symbol": d.get("s"),
+                            "price": float(d.get("p", 0)),
+                            "timestamp": d.get("T"),
+                            "event_type": d.get("e")
+                        }
+                    else:
+                        cleaned = data
+
+                    await send_callback(cleaned)
+
+        except Exception as e:
+            print(f"[Binance] Reconnecting due to: {e}")
+            await asyncio.sleep(RECONNECT_DELAY)
