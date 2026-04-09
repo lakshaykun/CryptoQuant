@@ -1,4 +1,3 @@
-# render_api/app/binance_ws.py
 import json
 import asyncio
 import websockets
@@ -10,31 +9,75 @@ def build_stream_url(symbols, stream_type):
     return f"{BASE_BINANCE_WS}?streams={streams}"
 
 
+def parse_kline(data):
+    """
+    Extract kline data into your required schema
+    """
+    if "data" not in data:
+        return None
+
+    d = data["data"]
+
+    # Only process kline events
+    if d.get("e") != "kline":
+        return None
+
+    k = d["k"]
+
+    return {
+        "symbol": d.get("s"),
+        "open_time": k["t"],
+        "open": float(k["o"]),
+        "high": float(k["h"]),
+        "low": float(k["l"]),
+        "close": float(k["c"]),
+        "volume": float(k["v"]),
+        "close_time": k["T"],
+        "quote_volume": float(k["q"]),
+        "trades": int(k["n"]),
+        "taker_buy_base": float(k["V"]),
+        "taker_buy_quote": float(k["Q"]),
+        "is_closed": k["x"],  # useful for filtering final candles
+        "ignore": 0
+    }
+
+
 async def stream_binance(symbols, stream_type, send_callback):
+    """
+    Main streaming loop with:
+    - reconnect logic
+    - parsing
+    - filtering
+    """
+
     url = build_stream_url(symbols, stream_type)
 
     while True:
         try:
-            async with websockets.connect(url, ping_interval=20, ping_timeout=20) as ws:
+            async with websockets.connect(
+                url,
+                ping_interval=20,
+                ping_timeout=20,
+                close_timeout=5
+            ) as ws:
+
                 print(f"[Binance] Connected → {url}")
 
                 while True:
                     message = await ws.recv()
-                    data = json.loads(message)
+                    raw = json.loads(message)
 
-                    # Normalize data (important for downstream)
-                    # if "data" in data:
-                    #     d = data["data"]
-                    #     cleaned = {
-                    #         "symbol": d.get("s"),
-                    #         "price": float(d.get("p", 0)),
-                    #         "timestamp": d.get("T"),
-                    #         "event_type": d.get("e")
-                    #     }
-                    # else:
-                    cleaned = data
+                    parsed = parse_kline(raw)
 
-                    await send_callback(cleaned)
+                    # Skip irrelevant messages
+                    if parsed is None:
+                        continue
+
+                    # OPTIONAL: only send closed candles
+                    # if not parsed["is_closed"]:
+                    #     continue
+
+                    await send_callback(parsed)
 
         except Exception as e:
             print(f"[Binance] Reconnecting due to: {e}")
