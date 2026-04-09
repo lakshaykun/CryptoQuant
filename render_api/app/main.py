@@ -5,6 +5,7 @@ from .binance_ws import stream_binance
 from .utils import send_ws_safe
 from .config import DEFAULT_SYMBOLS
 from .historical import fetch_today_klines
+import json 
 
 app = FastAPI(title="CryptoQuant Render Producer")
 
@@ -44,18 +45,28 @@ async def websocket_backfill(
         for symbol in symbol_list:
             data = fetch_today_klines(symbol, interval)
 
-            for row in data:
-                await send_ws_safe(websocket, row)
+            # 🚀 SEND FULL BATCH
+            await websocket.send_text(json.dumps({
+                "type": "backfill_batch",
+                "symbol": symbol.upper(),
+                "interval": interval,
+                "count": len(data),
+                "data": data
+            }))
 
-        # ✅ signal completion
-        await websocket.send_text('{"type":"backfill_complete"}')
+        # completion signal
+        await websocket.send_text(json.dumps({
+            "type": "backfill_complete"
+        }))
 
     except Exception as e:
-        await websocket.send_text(f'{{"error": "{str(e)}"}}')
+        await websocket.send_text(json.dumps({
+            "type": "error",
+            "message": str(e)
+        }))
 
     finally:
         await websocket.close()
-
 
 @app.websocket("/ws/binance/live")
 async def websocket_live(
