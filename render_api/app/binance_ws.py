@@ -1,3 +1,4 @@
+# render_api/app/binance_ws.py
 import json
 import asyncio
 import websockets
@@ -22,16 +23,16 @@ async def stream_binance(symbols, stream_type, send_callback):
                     data = json.loads(message)
 
                     # Normalize data (important for downstream)
-                    if "data" in data:
-                        d = data["data"]
-                        cleaned = {
-                            "symbol": d.get("s"),
-                            "price": float(d.get("p", 0)),
-                            "timestamp": d.get("T"),
-                            "event_type": d.get("e")
-                        }
-                    else:
-                        cleaned = data
+                    # if "data" in data:
+                    #     d = data["data"]
+                    #     cleaned = {
+                    #         "symbol": d.get("s"),
+                    #         "price": float(d.get("p", 0)),
+                    #         "timestamp": d.get("T"),
+                    #         "event_type": d.get("e")
+                    #     }
+                    # else:
+                    cleaned = data
 
                     await send_callback(cleaned)
 
