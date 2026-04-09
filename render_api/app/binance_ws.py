@@ -75,9 +75,9 @@ async def stream_binance(symbols, stream_type, send_callback):
                     if parsed is None:
                         continue
 
-                    # OPTIONAL: only send closed candles
-                    # if not parsed["is_closed"]:
-                    #     continue
+                    # only send closed candles
+                    if not parsed["is_closed"]:
+                        continue
 
                     await send_callback(parsed)
 
