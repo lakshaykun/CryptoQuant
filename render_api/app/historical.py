@@ -56,7 +56,6 @@ def fetch_today_klines(symbol: str, interval: str):
             "trades": int(row[8]),
             "taker_buy_base": float(row[9]),
             "taker_buy_quote": float(row[10]),
-            "is_closed": True,
             "ignore": 0
         })
 

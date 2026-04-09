@@ -4,7 +4,7 @@ import asyncio
 import websockets
 
 async def main():
-    uri = "wss://cryptoquantproducer.onrender.com/ws/binance/live?symbols=btcusdt,ethusdt&interval=1m"
+    uri = "wss://cryptoquantproducer.onrender.com/ws/binance/backfill?symbols=btcusdt,ethusdt&interval=1m"
 
     async with websockets.connect(uri) as ws:
         while True:
