@@ -124,11 +124,6 @@ pipelines/
 │   │   └── utils.py               # date utils, incremental logic
 │   │
 │   ├── streaming/
-│   │   ├── producer.py            # websocket → kafka
-│   │   ├── kafka_producer.py      # kafka producer wrapper
-│   │   ├── kafka_consumer.py      # kafka consumer (debug/testing)
-│   │   ├── spark_streaming.py     # main Spark streaming job
-│   │   └── schemas.py             # streaming JSON schema
 │
 ├── bronze/                        # RAW DATA WRITING LAYER
 │   ├── market.py                 # write_to_bronze (your code)
@@ -167,3 +162,24 @@ pipelines/
     ├── config_loader.py          # load YAML configs
     ├── spark.py                  # Spark session builder
     └── helpers.py
+
+
+pipelines/ingestion/streaming/
+│
+├── sources/
+│   ├── websocket_client.py
+│   └── binance_source.py
+│
+├── producers/
+│   └── kafka_producer.py
+│
+├── processors/
+│   ├── validator.py
+│   ├── transformer.py
+│   └── enricher.py
+│
+├── jobs/
+│   └── crypto_stream_job.py
+│
+└── spark/
+    └── spark_streaming.py

@@ -1,0 +1,26 @@
+# pipelines/ingestion/streaming/jobs/crypto_stream_job.py
+
+import asyncio
+from pipelines.ingestion.streaming.sources.binance_source import BinanceSource
+from pipelines.ingestion.streaming.producers.kafka_producer import CryptoProducer
+from pipelines.transformers.raw.market import RawMarketTransformer
+from pipelines.utils.config_loader import load_config
+from pipelines.utils.logger import get_logger
+
+logger = get_logger("stream_job")
+
+async def run():
+    dataConfig = load_config('configs/data.yaml')
+    source = BinanceSource(logger, dataConfig)
+    producer = CryptoProducer()
+    transformer = RawMarketTransformer()
+
+    async for raw in source.stream():
+        if raw.type == "heartbeat":
+            continue
+
+        data = transformer.transform(raw)
+        producer.send_price(data)
+
+if __name__ == "__main__":
+    asyncio.run(run())

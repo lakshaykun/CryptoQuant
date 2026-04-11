@@ -1,0 +1,8 @@
+# configs/kafka.yaml
+
+brokers: "crypto-kafka:9092"
+
+topics:
+  - name: crypto_prices
+    partitions: 3
+    replication_factor: 1

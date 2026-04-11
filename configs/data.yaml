@@ -3,8 +3,24 @@
 interval: "5m"
 start_date: "2026-04-01"
 
-bronze_market_path: "medallion/bronze/market/"
-silver_market_path: "medallion/silver/market/"
-gold_market_path: "medallion/gold/market/"
+
+tables:
+    bronze_market:
+        "path": "medallion/bronze/market/"
+        "partition_by": ["symbol", "date"]
+        "checkpoint": "medallion/checkpoint/bronze/market/"
+
+    silver_market:
+        "path": "medallion/silver/market/"
+        "partition_by": ["symbol", "date"]
+        "checkpoint": "medallion/checkpoint/silver/market/"
+
+    gold_market:
+        "path": "medallion/gold/market/"
+        "partition_by": ["symbol", "date"]
+        "checkpoint": "medallion/checkpoint/gold/market/"
+
 
 symbols: ["BTCUSDT", "ETHUSDT"]
+
+binance_ws_uri: "wss://cryptoquantproducer.onrender.com/ws/binance/live?symbols=btcusdt,ethusdt&interval=1m"

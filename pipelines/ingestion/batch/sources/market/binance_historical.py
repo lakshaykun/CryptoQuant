@@ -27,16 +27,6 @@ def daterange(start_date, end_date):
         yield current
         current += timedelta(days=1)
 
-def convert_timestamp(series):
-    max_val = series.max()
-
-    if max_val > 1e15:
-        return pd.to_datetime(series, unit="us", errors="coerce")
-    elif max_val > 1e12:
-        return pd.to_datetime(series, unit="ms", errors="coerce")
-    else:
-        return pd.to_datetime(series, unit="s", errors="coerce")
-
 # -----------------------------
 # Core worker (ONE TASK)
 # -----------------------------
@@ -59,17 +49,6 @@ def fetch_single_day(symbol, interval, single_date, logger):
 
                 df = df.iloc[:, :12]
                 df.columns = COLUMNS
-
-                # Safe timestamp handling
-                df["open_time"] = pd.to_numeric(df["open_time"], errors="coerce")
-                df["close_time"] = pd.to_numeric(df["close_time"], errors="coerce")
-
-                df = df.dropna(subset=["open_time", "close_time"])
-
-                df["open_time"] = convert_timestamp(df["open_time"])
-                df["close_time"] = convert_timestamp(df["close_time"])
-
-                df = df.dropna(subset=["open_time", "close_time"])
 
                 df["symbol"] = symbol
 
