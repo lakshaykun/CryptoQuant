@@ -25,7 +25,7 @@ class PredictRequest(BaseModel):
 
 
 class CryptoEngineeredFeatures(BaseModel):
-    timestamp: int
+    open_time: datetime
     close: float
     volume: float
     trades: int

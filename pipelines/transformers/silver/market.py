@@ -2,7 +2,6 @@
 
 from pyspark.sql import functions as F
 from pyspark.sql import DataFrame as SparkDataFrame
-from pyspark.sql.window import Window
 
 
 class SilverMarketTransformer:
@@ -16,9 +15,9 @@ class SilverMarketTransformer:
         if df is None:
             return None
 
-        # Avoid full scan
-        if df.limit(1).count() == 0:
-            return df
+        if not df.isStreaming:
+            if not df.head(1):
+                return df.limit(0)
 
         # ---------------------------
         # Drop unnecessary columns
@@ -54,7 +53,7 @@ class SilverMarketTransformer:
         # ---------------------------
         df = df.selectExpr(
             "symbol",
-            "open_time as timestamp",
+            "open_time",
             "cast(open as double) as open",
             "cast(high as double) as high",
             "cast(low as double) as low",

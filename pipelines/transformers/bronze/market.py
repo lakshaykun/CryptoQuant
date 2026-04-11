@@ -47,8 +47,6 @@ class BronzeMarketTransformer:
             if not df.head(1):
                 return df.limit(0)
         
-        df.select("open_time").show(5, False)
-
         # Standardize timestamps
         df = df.filter(F.col("open_time") > 1e12)
         
@@ -73,4 +71,11 @@ class BronzeMarketTransformer:
     
     @staticmethod
     def _normalize_ts(col):
-        return F.from_unixtime((col / 1000000).cast("long")).cast("timestamp")
+        col = col.cast("long")
+
+        return (
+            F.when(col > 1e15, F.from_unixtime((col / 1e6).cast("long")))  # microseconds
+            .when(col > 1e12, F.from_unixtime((col / 1e3).cast("long")))  # milliseconds
+            .otherwise(F.from_unixtime(col))                              # seconds
+            .cast("timestamp")
+        )

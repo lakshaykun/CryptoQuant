@@ -4,7 +4,7 @@ from pyspark.sql.types import *
 
 
 GOLD_MARKET_SCHEMA = StructType([
-    StructField("timestamp", TimestampType(), False),
+    StructField("open_time", TimestampType(), False),
     StructField("symbol", StringType(), False),
 
     # core market data

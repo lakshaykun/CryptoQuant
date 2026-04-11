@@ -16,9 +16,6 @@ async def run():
     transformer = RawMarketTransformer()
 
     async for raw in source.stream():
-        if raw.type == "heartbeat":
-            continue
-
         data = transformer.transform(raw)
         producer.send_price(data)
 

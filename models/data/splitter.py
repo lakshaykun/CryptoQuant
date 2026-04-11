@@ -1,5 +1,5 @@
 def time_split(df, test_ratio=0.2):
-    df = df.sort_values("timestamp")
+    df = df.sort_values("open_time")
 
     split_index = int(len(df) * (1 - test_ratio))
     

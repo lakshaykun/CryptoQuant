@@ -1,15 +1,23 @@
 # pipelines/transformations/gold/market.py
 
+from datetime import timedelta
+
 from pyspark.sql import functions as F
 from pyspark.sql import DataFrame as SparkDataFrame
 from pyspark.sql.window import Window
+from pipelines.storage.delta.reader import read_incremental
 
 class GoldMarketTransformer:
     @staticmethod
     def transform(df: SparkDataFrame) -> SparkDataFrame:
         '''Feature engineering for market data. Creates new features based on existing columns of silver market data.'''
-        if df is None or df.rdd.isEmpty():
+        
+        if df is None:
             return None
+
+        if not df.isStreaming:
+            if not df.head(1):
+                return df.limit(0)
         
         # log_return = log(close / open)
         df = df.withColumn(
@@ -37,7 +45,7 @@ class GoldMarketTransformer:
             .otherwise(0.0)
         )
 
-        base_window = Window.partitionBy("symbol").orderBy("timestamp")
+        base_window = Window.partitionBy("symbol").orderBy("open_time")
 
         df = df.withColumn("log_return_lag1", F.lag("log_return", 1).over(base_window))
         df = df.withColumn("log_return_lag2", F.lag("log_return", 2).over(base_window))
@@ -73,8 +81,8 @@ class GoldMarketTransformer:
                 (F.col("close") - F.col("open")) / F.col("close"))
             .otherwise(0.0)
         )
-        df = df.withColumn("hour", F.hour(F.col("timestamp")))
-        df = df.withColumn("day_of_week", F.dayofweek(F.col("timestamp")))
+        df = df.withColumn("hour", F.hour(F.col("open_time")))
+        df = df.withColumn("day_of_week", F.dayofweek(F.col("open_time")))
         df = df.withColumn("trend_strength", F.col("ma_5") - F.col("ma_20"))
 
         df = df.withColumn(
@@ -99,6 +107,54 @@ class GoldMarketTransformer:
             )
         )
 
-        df = df.withColumn("date", F.to_date(F.col("timestamp")))
+        df = df.withColumn("date", F.to_date(F.col("open_time")))
 
         return df
+    
+
+    @staticmethod
+    def process_gold_stream_batch(
+        df: SparkDataFrame,
+        epoch_id: int
+    ):
+        """
+        For stream pipelines, we need to load historical silver data to calculate features that require past values (e.g. moving averages, lags). This function handles that logic.
+        """
+        spark = df.sparkSession
+        # get minimum open_time in the batch
+        min_open_time = df.select(F.min("open_time")).first()[0]
+
+        min_fetch_time = min_open_time - timedelta(minutes=30)
+
+        # Load historical silver
+        historical_df = read_incremental(
+            spark, 
+            "silver_market", 
+            "open_time", 
+            min_fetch_time
+        )
+
+        historical_df = historical_df.drop("ingestion_time")
+
+        historical_df = historical_df.join(
+            df.select("symbol").distinct(),
+            on="symbol",
+            how="inner"
+        )
+
+        combined = (
+            historical_df.unionByName(df)
+            .dropDuplicates(["symbol", "open_time"])
+        )
+
+        # Apply transformations
+        combined = GoldMarketTransformer.transform(combined)
+
+        df_keys = df.select("symbol", "open_time").dropDuplicates()
+        result = combined.join(
+            df_keys,
+            on=["symbol", "open_time"],
+            how="inner"
+        )
+
+        return result

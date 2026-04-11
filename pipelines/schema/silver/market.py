@@ -5,7 +5,7 @@ from pyspark.sql.types import *
 SILVER_MARKET_SCHEMA = StructType([
     StructField("symbol", StringType()),
 
-    StructField("timestamp", TimestampType()),
+    StructField("open_time", TimestampType()),
 
     StructField("open", DoubleType()),
     StructField("high", DoubleType()),

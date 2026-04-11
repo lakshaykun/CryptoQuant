@@ -1,5 +1,5 @@
 EXPECTED_COLUMNS = [
-    'timestamp',
+    'open_time',
     'close',
     'volume',
     'trades',

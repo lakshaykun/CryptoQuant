@@ -12,7 +12,7 @@ Expected input columns
 
 Output columns
 --------------
-    close, volume, trades, taker_buy_base, symbol,
+    open_time, close, volume, trades, taker_buy_base, symbol,
     log_return, volatility, imbalance_ratio, buy_ratio, vwap,
     log_return_lag1, log_return_lag2, buy_ratio_lag1,
     ma_5, ma_20, volatility_5, volume_5, buy_ratio_5,
@@ -40,6 +40,7 @@ REQUIRED_COLUMNS = [
 ]
 
 OUTPUT_COLUMNS = [
+    "open_time",
     "close",
     "volume",
     "trades",
@@ -77,6 +78,7 @@ def _safe_divide(numerator: pd.Series, denominator: pd.Series) -> pd.Series:
 def _empty_output_frame() -> pd.DataFrame:
     return pd.DataFrame(
         {
+            "open_time": pd.Series(dtype="datetime64[ns]"),
             "close": pd.Series(dtype="float64"),
             "volume": pd.Series(dtype="float64"),
             "trades": pd.Series(dtype="float64"),
@@ -225,8 +227,6 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
 
     df = drop_raw_columns(df)
     df = drop_incomplete_rows(df)
-
-    df = df.rename(columns={"open_time": "timestamp"})
 
     if df.empty:
         return _empty_output_frame()

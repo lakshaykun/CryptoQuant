@@ -1,24 +1,17 @@
 # pipelines/transformations/raw/market.py
 
-from pyspark.sql import functions as F
-from pyspark.sql import DataFrame as SparkDataFrame
+import json
 
 class RawMarketTransformer:
     @staticmethod
-    def transform(df: SparkDataFrame, source: str = "stream") -> SparkDataFrame:
-        '''Transforms raw market data into a standardized format for bronze layer.'''
+    def transform(df: json) -> json:
+        '''Transforms raw market data into a standardized format for kafka.'''
         
         if df is None:
             return None
         
-        if df.limit(1).count() == 0:
-            return df.limit(0)  # Return empty DataFrame with same schema
-        
         # Remove the ignore column
-        if "ignore" in df.columns:
-            df = df.drop("ignore")       
-        
-        # Drop Duplicates based on natural keys (symbol + open_time)
-        df = df.dropDuplicates(["symbol", "open_time"])
+        if "ignore" in df:
+            del df["ignore"]
 
         return df

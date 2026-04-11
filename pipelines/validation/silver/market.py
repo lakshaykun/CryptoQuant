@@ -23,7 +23,7 @@ class SilverMarketValidator:
 
         agg = df.agg(
             F.sum(F.col("symbol").isNull().cast("int")).alias("symbol_nulls"),
-            F.sum(F.col("timestamp").isNull().cast("int")).alias("timestamp_nulls"),
+            F.sum(F.col("open_time").isNull().cast("int")).alias("open_time_nulls"),
             F.sum((F.col("volume") < 0).cast("int")).alias("negative_volume"),
         ).collect()[0].asDict()
 
@@ -32,8 +32,8 @@ class SilverMarketValidator:
         if agg["symbol_nulls"] > 0:
             errors.append("Null values in symbol")
 
-        if agg["timestamp_nulls"] > 0:
-            errors.append("Null values in timestamp")
+        if agg["open_time_nulls"] > 0:
+            errors.append("Null values in open_time")
 
         if agg["negative_volume"] > 0:
             errors.append("Negative volume detected")

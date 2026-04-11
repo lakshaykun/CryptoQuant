@@ -53,8 +53,9 @@ def read_table(
 def read_incremental(
     spark: SparkSession,
     table_name: str,
-    timestamp_col: str,
-    last_value: Optional[datetime.datetime]
+    open_time_col: str,
+    last_value: Optional[datetime.datetime],
+    symbols: Optional[List[str]] = None
 ) -> DataFrame:
     """
     Reads only new data after last_value.
@@ -66,7 +67,11 @@ def read_incremental(
         df = spark.read.format("delta").load(table_config["path"])
 
         if last_value is not None:
-            df = df.filter(F.col(timestamp_col) > F.lit(last_value))
+            df = df.filter(F.col("date") >= F.to_date(F.lit(last_value)))
+            df = df.filter(F.col(open_time_col) > F.lit(last_value))
+
+        if symbols is not None:
+            df = df.filter(F.col("symbol").isin(symbols))
 
         logger.info(f"[{table_name}] Incremental read from {last_value}")
 
@@ -141,7 +146,7 @@ def read_latest_partition(
 
 
 # ---------------------------
-# 🔹 Get Max Timestamp (for pipelines)
+# 🔹 Get Max Open Time (for pipelines)
 # ---------------------------
 
 def get_last_value(
@@ -169,13 +174,13 @@ def get_last_value(
         return None
     
 
-def get_last_timestamp_symbols(
+def get_last_open_time_symbols(
         spark: SparkSession, 
         table_name: str,
         symbols: List[str], 
         start_date: datetime.datetime
 ) -> dict:
-    '''Returns max timestamp per symbol (used for incremental pipelines).'''
+    '''Returns max open_time per symbol (used for incremental pipelines).'''
 
     table_config = get_table_config(table_name, CONFIG)
     
@@ -185,13 +190,13 @@ def get_last_timestamp_symbols(
         # Filter only required symbols (important for performance)
         df = df.filter(F.col("symbol").isin(symbols))
 
-        # Get max timestamp per symbol
+        # Get max open_time per symbol
         result_df = (
             df.groupBy("symbol")
               .agg(F.max("open_time").alias("max_time"))
         )
 
-        # Convert to dict: symbol -> timestamp
+        # Convert to dict: symbol -> open_time
         result = {
             row["symbol"]: row["max_time"]
             for row in result_df.collect()

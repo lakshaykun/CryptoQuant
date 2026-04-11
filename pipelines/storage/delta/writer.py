@@ -1,7 +1,5 @@
 # pipelines/storage/delta/writer.py
 
-import time
-import random
 from typing import Optional
 
 from pyspark.sql import DataFrame
@@ -79,6 +77,8 @@ def write_batch(
 
             logger.info(f"[{table_name}] Initial write successful → {path}")
 
+        logger.info(f"[{table_name}] Batch write completed -> {df.count()} rows")
+        df.show(5, truncate=False)
     except Exception as e:
         logger.error(f"[{table_name}] Delta write failed → {e}")
         raise

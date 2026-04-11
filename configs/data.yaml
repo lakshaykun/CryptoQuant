@@ -1,6 +1,6 @@
 # configs/data.yaml
 
-interval: "5m"
+interval: "1m"
 start_date: "2026-04-01"
 
 
