@@ -86,6 +86,3 @@ pipeline-reset-data:
 
 run-model:
 	uvicorn model_server.app:app --host 0.0.0.0 --port 8000 --reload
-
-run-dashboard:
-	streamlit run dashboards/streamlit.py --server.port=8501 --server.address=0.0.0.0

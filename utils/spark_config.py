@@ -11,8 +11,8 @@ DEFAULT_SPARK_CONFIG: dict[str, Any] = {
 		"master": "local[*]",
 	},
 	"gold": {
-		"window_seconds": 300,
-		"watermark_seconds": 600,
+		"window_seconds": 60,
+		"watermark_seconds": 120,
 		"sentiment_endpoint": "http://127.0.0.1:8000/predict",
 		"sentiment_timeout_seconds": 10,
 	},

@@ -1,7 +1,6 @@
 import time
 import os
-from ingestion.youtube.fetch_latest_video import get_recent_video_ids, get_recent_video_ids_for_channel
-from ingestion.youtube.fetch_comments import fetch_video_comments
+from ingestion.youtube.fetch_comments import fetch_channel_comments
 from ingestion.common.redis_dedup import is_duplicate, add_to_bloom
 from ingestion.common.kafka_producer import send
 from utils.source_config import get_list_value, get_sources_section
@@ -15,13 +14,6 @@ DEFAULT_TARGET_CHANNEL_IDS = [
 ]
 
 
-def _configured_playlists() -> list[str]:
-    section = get_sources_section("youtube")
-
-    explicit_playlists = get_list_value(section, "upload_playlists", [])
-    return [item for item in explicit_playlists if not item.startswith("PLAYLIST_ID")]
-
-
 def _configured_channels() -> list[str]:
     section = get_sources_section("youtube")
     channel_ids = get_list_value(section, "channel_ids", DEFAULT_TARGET_CHANNEL_IDS)
@@ -29,47 +21,35 @@ def _configured_channels() -> list[str]:
 
 
 def poll_youtube():
-    raw_max_videos = os.getenv("YOUTUBE_MAX_VIDEOS_PER_CHANNEL", "5")
+    raw_max_comments = os.getenv("YOUTUBE_MAX_COMMENTS_PER_CHANNEL", "100")
     try:
-        max_videos_per_channel = max(1, int(raw_max_videos))
+        max_comments_per_channel = max(1, int(raw_max_comments))
     except ValueError:
-        print(f"Invalid YOUTUBE_MAX_VIDEOS_PER_CHANNEL={raw_max_videos!r}, defaulting to 5")
-        max_videos_per_channel = 5
+        print(f"Invalid YOUTUBE_MAX_COMMENTS_PER_CHANNEL={raw_max_comments!r}, defaulting to 100")
+        max_comments_per_channel = 100
 
-    explicit_playlists = _configured_playlists()
-    if explicit_playlists:
-        targets = [("playlist", value) for value in explicit_playlists]
-    else:
-        targets = [("channel", value) for value in _configured_channels()]
+    targets = _configured_channels()
 
-    for target_kind, target_value in targets:
-        if target_kind == "playlist":
-            video_ids = get_recent_video_ids(target_value, max_results=max_videos_per_channel)
-            print(f"Fetched {len(video_ids)} video IDs for playlist {target_value}: {video_ids}")
-        else:
-            video_ids = get_recent_video_ids_for_channel(target_value, max_results=max_videos_per_channel)
-            print(f"Fetched {len(video_ids)} video IDs for channel {target_value}: {video_ids}")
-
-        if not video_ids:
+    for channel_id in targets:
+        comments = fetch_channel_comments(channel_id, max_results=max_comments_per_channel)
+        print(f"Fetched {len(comments)} comments for channel {channel_id}")
+        if not comments:
             continue
 
-        for video_id in video_ids:
-            comments = fetch_video_comments(video_id)
-            print(f"Fetched {len(comments)} comments for video {video_id}")
-            for comment in comments:
-                if is_duplicate(comment["id"]):
-                    continue
+        for comment in comments:
+            if is_duplicate(comment["id"]):
+                continue
 
-                send("btc_yt", comment)
-                print(f"Sent comment {comment['id']} to Kafka")
-                add_to_bloom(comment["id"])
+            send("btc_yt", comment)
+            print(f"Sent comment {comment['id']} to Kafka")
+            add_to_bloom(comment["id"])
 
 
 def run_forever():
     while True:
         poll_youtube()
         print("pulling messages from youtube...")
-        time.sleep(300)
+        time.sleep(180)
 
 
 if __name__ == "__main__":
