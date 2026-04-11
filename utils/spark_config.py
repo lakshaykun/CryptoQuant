@@ -13,6 +13,7 @@ DEFAULT_SPARK_CONFIG: dict[str, Any] = {
 	"gold": {
 		"window_seconds": 60,
 		"watermark_seconds": 120,
+		"cron_minutes": 5,
 		"sentiment_endpoint": "http://127.0.0.1:8000/predict",
 		"sentiment_timeout_seconds": 10,
 	},
@@ -106,6 +107,15 @@ def get_gold_sentiment_timeout_seconds(default: int = 10) -> int:
 	try:
 		seconds = int(value)
 		return seconds if seconds > 0 else default
+	except (TypeError, ValueError):
+		return default
+
+
+def get_gold_cron_minutes(default: int = 5) -> int:
+	value = _section("gold").get("cron_minutes", default)
+	try:
+		minutes = int(value)
+		return minutes if minutes > 0 else default
 	except (TypeError, ValueError):
 		return default
 

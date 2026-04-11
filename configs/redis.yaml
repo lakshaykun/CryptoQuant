@@ -1,4 +1,0 @@
-bloom:
-  key: crypto_sentiment_bloom
-  error_rate: 0.001
-  capacity: 1000000

@@ -3,6 +3,7 @@ from spark_jobs.common.runtime_env import configure_pyspark_python
 configure_pyspark_python()
 
 from pyspark.sql import DataFrame
+from pyspark.sql.functions import col, current_timestamp, expr
 
 from spark_jobs.common.job_runtime import await_query, configure_job_logging, start_delta_query
 from utils.spark_utils import create_delta_spark_session
@@ -21,6 +22,7 @@ KAFKA_SUBSCRIBE_TOPICS = get_kafka_option("subscribe", "btc_reddit,btc_yt,btc_ne
 KAFKA_STARTING_OFFSETS = get_kafka_option("starting_offsets", "latest")
 KAFKA_FAIL_ON_DATA_LOSS = get_kafka_option("fail_on_data_loss", "false")
 APP_NAME = f"{get_spark_app_name()}-bronze"
+BRONZE_LOOKBACK_HOURS = 24
 
 
 def build_kafka_stream() -> DataFrame:
@@ -42,12 +44,18 @@ def build_kafka_stream() -> DataFrame:
 
 
 def build_raw_events_stream(kafka_df: DataFrame) -> DataFrame:
-    return kafka_df.selectExpr(
-        "CAST(value AS STRING) as raw_json",
-        "topic",
-        "partition",
-        "offset",
-        "timestamp as kafka_timestamp",
+    return (
+        kafka_df
+        .selectExpr(
+            "CAST(value AS STRING) as raw_json",
+            "topic",
+            "partition",
+            "offset",
+            "timestamp as kafka_timestamp",
+        )
+        .filter(
+            col("kafka_timestamp") >= current_timestamp() - expr(f"INTERVAL {BRONZE_LOOKBACK_HOURS} HOURS")
+        )
     )
 
 

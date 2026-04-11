@@ -3,7 +3,7 @@ SHELL := /bin/bash
 COMPOSE_FILE := docker/docker-compose.yml
 COMPOSE := docker compose -f $(COMPOSE_FILE)
 
-.PHONY: help pipeline-up pipeline-down pipeline-restart pipeline-logs pipeline-ps pipeline-build pipeline-pull pipeline-clean pipeline-reset-data run-model run-dashboard
+.PHONY: help pipeline-up pipeline-down pipeline-restart pipeline-logs pipeline-ps pipeline-build pipeline-pull pipeline-clean pipeline-reset-data run-model
 
 help:
 	@echo "Available targets:"
@@ -17,7 +17,6 @@ help:
 	@echo "  pipeline-clean    Stop and remove containers, volumes, orphans"
 	@echo "  pipeline-reset-data  Remove delta and checkpoint data for bronze/silver/gold"
 	@echo "  run-model         Run FastAPI model server locally"
-	@echo "  run-dashboard     Run Streamlit dashboard locally"
 
 pipeline-up:
 	$(COMPOSE) up -d --build
@@ -77,12 +76,6 @@ pipeline-reset-data:
 		checkpoints/bronze \
 		checkpoints/silver \
 		checkpoints/gold
-	@if $(COMPOSE) exec -T redis redis-cli ping >/dev/null 2>&1; then \
-		$(COMPOSE) exec -T redis redis-cli FLUSHALL >/dev/null; \
-		echo "Redis memory cleared (FLUSHALL)."; \
-	else \
-		echo "Redis is not reachable; skipped Redis flush."; \
-	fi
 
 run-model:
 	uvicorn model_server.app:app --host 0.0.0.0 --port 8000 --reload

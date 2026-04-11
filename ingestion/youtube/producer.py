@@ -1,7 +1,6 @@
 import time
 import os
 from ingestion.youtube.fetch_comments import fetch_channel_comments
-from ingestion.common.redis_dedup import is_duplicate, add_to_bloom
 from ingestion.common.kafka_producer import send
 from utils.source_config import get_list_value, get_sources_section
 
@@ -21,7 +20,7 @@ def _configured_channels() -> list[str]:
 
 
 def poll_youtube():
-    raw_max_comments = os.getenv("YOUTUBE_MAX_COMMENTS_PER_CHANNEL", "100")
+    raw_max_comments = os.getenv("YOUTUBE_MAX_COMMENTS_PER_CHANNEL", "400")
     try:
         max_comments_per_channel = max(1, int(raw_max_comments))
     except ValueError:
@@ -37,12 +36,8 @@ def poll_youtube():
             continue
 
         for comment in comments:
-            if is_duplicate(comment["id"]):
-                continue
-
             send("btc_yt", comment)
             print(f"Sent comment {comment['id']} to Kafka")
-            add_to_bloom(comment["id"])
 
 
 def run_forever():

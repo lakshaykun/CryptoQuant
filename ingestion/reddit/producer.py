@@ -1,7 +1,6 @@
 import requests
 import time
 from ingestion.common.engagement_utils import normalized_weights
-from ingestion.common.redis_dedup import is_duplicate, add_to_bloom
 from ingestion.common.kafka_producer import send
 from ingestion.common.schemas import normalize_event
 from utils.number_utils import percent, to_float, to_int
@@ -50,7 +49,7 @@ def _engagement_score(post: dict, total_score: int, total_comments: int, weights
 def fetch_reddit():
     """
     Scrapes Reddit using the JSON API while maintaining 
-    the original Kafka/Redis ingestion flow.
+    the original Kafka ingestion flow.
     """
     section = get_sources_section("reddit")
     subreddits = get_list_value(section, "subreddits", DEFAULT_SUBREDDITS)
@@ -84,9 +83,6 @@ def fetch_reddit():
                 for post in post_data:
                     post_id = post["id"]
 
-                    if is_duplicate(post_id):
-                        continue
-
                     payload = {
                         "id": post_id,
                         "timestamp": str(post["created_utc"]),
@@ -101,7 +97,6 @@ def fetch_reddit():
                         continue
                     
                     send("btc_reddit", payload)
-                    add_to_bloom(post_id)
 
                 # Rate limiting to be polite to the API
                 time.sleep(1)

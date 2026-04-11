@@ -44,29 +44,6 @@ services:
     command: ["/bin/sh", "/opt/bootstrap/create_topics.sh"]
     restart: "no"
 
-  redis:
-    image: redis/redis-stack:latest
-    ports:
-      - "6379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-
-  redis_bootstrap:
-    image: redis/redis-stack:latest
-    depends_on:
-      redis:
-        condition: service_healthy
-    command:
-      [
-        "/bin/sh",
-        "-c",
-        "until redis-cli -h redis ping; do sleep 1; done; redis-cli -h redis BF.RESERVE crypto_sentiment_bloom 0.001 1000000 || true"
-      ]
-    restart: "no"
-
   model_server:
     build:
       context: ..
@@ -77,8 +54,6 @@ services:
       - "8000:8000"
     depends_on:
       kafka_bootstrap:
-        condition: service_completed_successfully
-      redis_bootstrap:
         condition: service_completed_successfully
 
 volumes:

@@ -8,7 +8,6 @@ import feedparser
 
 from ingestion.common.engagement_utils import normalized_weights
 from ingestion.common.kafka_producer import send
-from ingestion.common.redis_dedup import add_to_bloom, is_duplicate
 from ingestion.common.schemas import normalize_event
 from utils.env import get_env
 from utils.number_utils import percent, to_int
@@ -223,11 +222,7 @@ def publish_news() -> int:
         item_id = item["id"]
 
         try:
-            if is_duplicate(item_id):
-                continue
-
             send(KAFKA_TOPIC, item)
-            add_to_bloom(item_id)
             sent += 1
 
         except Exception as e:

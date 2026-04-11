@@ -42,6 +42,7 @@ def _list_comment_threads_for_channel(youtube, channel_id: str, max_results: int
         response = youtube.commentThreads().list(
             part="snippet",
             allThreadsRelatedToChannelId=channel_id,
+            searchTerms="bitcoin",
             maxResults=min(max_results - len(items), 100),
             order="time",
             pageToken=next_page_token,
@@ -60,57 +61,6 @@ def _list_comment_threads_for_channel(youtube, channel_id: str, max_results: int
             break
 
     return items[:max_results]
-
-
-def fetch_video_comments(video_id: str, max_results: int = 50) -> list[dict]:
-    youtube = _youtube_client()
-    if youtube is None:
-        return []
-
-    try:
-        video_like_percent = _video_like_percentage(youtube, video_id)
-
-        response = youtube.commentThreads().list(
-            part="snippet",
-            videoId=video_id,
-            maxResults=max_results,
-            order="time"
-        ).execute()
-
-        comments = []
-        comment_rows = []
-
-        for item in response.get("items", []):
-            comment = item["snippet"]["topLevelComment"]["snippet"]
-            comment_like_count = to_int(comment.get("likeCount", 0))
-            comment_rows.append((item, comment, comment_like_count))
-
-        total_comment_likes = sum(row[2] for row in comment_rows)
-
-        for item, comment, comment_like_count in comment_rows:
-            comment_like_percent = 0.0
-            if total_comment_likes > 0:
-                comment_like_percent = (comment_like_count / total_comment_likes) * 100.0
-
-            # Combined engagement score requested: video like % + comment like %.
-            engagement_score = int(round(video_like_percent + comment_like_percent))
-
-            payload = {
-                "id": item["id"],
-                "timestamp": comment["publishedAt"],
-                "source": "youtube",
-                "text": comment["textDisplay"],
-                "engagement": engagement_score,
-                "symbol": "BTC"
-            }
-
-            comments.append(payload)
-
-        return comments
-
-    except HttpError as e:
-        print(f"Comment fetch failed: {e}")
-        return []
 
 
 def fetch_channel_comments(channel_id: str, max_results: int = 100) -> list[dict]:

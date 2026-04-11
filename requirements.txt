@@ -34,7 +34,7 @@ greenlet==3.3.2
 gunicorn==25.3.0
 h11==0.16.0
 huey==2.6.0
-idna==3.11
+idna==3.10
 importlib_metadata==8.7.1
 ipykernel==7.2.0
 ipython==8.37.0
@@ -87,7 +87,7 @@ python-dotenv==1.2.2
 pytz==2026.1.post1
 PyYAML==6.0.3
 pyzmq==27.1.0
-requests==2.33.1
+requests==2.32.3
 scikit-learn==1.8.0
 scipy==1.17.1
 six==1.17.0
@@ -110,6 +110,6 @@ Werkzeug==3.1.7
 xgboost==3.2.0
 zipp==3.23.0
 feedparser>=6.0,<7.0
-redis>=5.0,<6.0
 kafka-python>=2.0,<3.0
 google-api-python-client>=2.137,<3.0
+wordcloud>=1.9,<2.0
