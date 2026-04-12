@@ -1,17 +1,32 @@
 # CryptoQuant Render Producer
 
-WebSocket proxy for Binance streams.
+The Render API is the public WebSocket proxy for Binance market data. It exposes a backfill endpoint for the current trading day and a live endpoint that forwards closed Binance kline events to downstream consumers.
 
-## Endpoint
+## Endpoints
 
-/ws/binance?symbols=btcusdt,ethusdt&stream_type=trade
+- `GET /` - health check.
+- `WS /ws/binance/backfill` - sends the current day's historical candles by symbol.
+- `WS /ws/binance/live` - streams live closed candles with heartbeat messages.
 
-## Run locally
+## Key files
 
-uvicorn app.main:app --reload
+- `app/main.py` - FastAPI app and WebSocket routes.
+- `app/binance_ws.py` - Binance socket connection and candle parsing.
+- `app/historical.py` - same-day historical candle fetcher.
+- `app/config.py` - environment-backed defaults for symbols and stream type.
+- `app/utils.py` - WebSocket send helper.
 
-## Deploy on Render
+## Role in the system
 
-- Root directory: render_producer
-- Build: pip install -r requirements.txt
-- Start: uvicorn app.main:app --host 0.0.0.0 --port 10000
+This service is the upstream data source for the streaming pipeline in `pipelines/ingestion/streaming/`. It should stay focused on transport, parsing, and retry behavior rather than storage or model logic.
+
+## Deployment notes
+
+- The app can run locally with `uvicorn app.main:app --reload`.
+- The Render start command should bind to `0.0.0.0` and the platform-provided port.
+- Keep the symbol and interval defaults aligned with `configs/data.yaml`.
+
+## Future direction
+
+- Add stronger monitoring for reconnects and WebSocket disconnects.
+- Make the stream contract explicit if additional exchanges or instruments are added.
