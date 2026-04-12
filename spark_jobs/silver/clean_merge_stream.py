@@ -198,7 +198,7 @@ def clean_stream(parsed_stream):
     return (
         cleaned
         .filter(col("event_time").isNotNull())
-        .filter(length(col("text")) > 20)
+        .filter(length(col("text")) > 5)
         .filter(~col("text").rlike("(?i)100x|free money|pump signal|join now"))
         .filter(~col("text").rlike("(?i)whatsapp group|telegram signal"))
     )

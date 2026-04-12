@@ -74,7 +74,21 @@ def resolve_sentiment_column(df) -> F.Column:
     )
 
 
-def plot_sentiment_line(df, output_plot: str, last_hours: int = 12) -> None:
+def _ema_from_recent(values: list[float], window: int) -> float:
+    span = max(1, window)
+    alpha = 2.0 / (span + 1.0)
+    ema = values[0]
+    for value in values[1:]:
+        ema = (alpha * value) + ((1.0 - alpha) * ema)
+    return float(ema)
+
+
+def plot_sentiment_line(
+    df,
+    output_plot: str,
+    last_hours: int = 12,
+    ema_window: int = 10,
+) -> None:
     output_path = Path(output_plot)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_csv = output_path.with_suffix(".csv")
@@ -131,38 +145,25 @@ def plot_sentiment_line(df, output_plot: str, last_hours: int = 12) -> None:
             f"No rows available to plot in the last {last_hours} hours."
         )
 
+    ema_window = max(5, min(10, int(ema_window)))
+
     for idx in range(len(minute_scores)):
         if minute_scores[idx] is not None:
             continue
 
-        prev_idx = None
-        next_idx = None
+        recent = [
+            value for value in minute_scores[max(0, idx - ema_window):idx]
+            if value is not None
+        ]
 
-        for i in range(idx - 1, -1, -1):
-            if minute_scores[i] is not None:
-                prev_idx = i
-                break
-
-        for i in range(idx + 1, len(minute_scores)):
-            if minute_scores[i] is not None:
-                next_idx = i
-                break
-
-        if prev_idx is not None and next_idx is not None:
-            # Linear interpolation between nearest known points.
-            prev_val = minute_scores[prev_idx]
-            next_val = minute_scores[next_idx]
-            ratio = (idx - prev_idx) / (next_idx - prev_idx)
-            minute_scores[idx] = prev_val + ratio * (next_val - prev_val)
-        elif prev_idx is not None:
-            minute_scores[idx] = minute_scores[prev_idx]
-        elif next_idx is not None:
-            minute_scores[idx] = minute_scores[next_idx]
+        if recent:
+            minute_scores[idx] = _ema_from_recent(recent, ema_window)
         else:
-            minute_scores[idx] = 0.0
+            # If missing values begin before first observation, use first known point.
+            minute_scores[idx] = minute_scores[known_indices[0]]
 
     plt.figure(figsize=(12, 6))
-    plt.plot(x_vals, minute_scores, linewidth=1.8, alpha=0.85, label="1-min sentiment (actual + predicted)")
+    plt.plot(x_vals, minute_scores, linewidth=1.8, alpha=0.85, label="1-min sentiment (actual + EMA estimate)")
     plt.title(f"Total Sentiment Score (Last {last_hours} Hours, 1-Min Aggregation)")
     plt.xlabel("Time")
     plt.ylabel("Total Sentiment Score")
@@ -202,6 +203,12 @@ def main() -> None:
         default=12,
         help="Only include data from the last N hours (default: 12)",
     )
+    parser.add_argument(
+        "--ema-window",
+        type=int,
+        default=10,
+        help="EMA lookback window for non-observed minutes (clamped to 5-10, default: 10)",
+    )
     args = parser.parse_args()
 
     spark = build_spark()
@@ -211,7 +218,7 @@ def main() -> None:
         df.printSchema()
         print(f"Row count: {df.count()}")
 
-        plot_sentiment_line(df, args.output, args.last_hours)
+        plot_sentiment_line(df, args.output, args.last_hours, args.ema_window)
         print(f"Line graph created at: {args.output}")
     finally:
         spark.stop()

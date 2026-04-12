@@ -21,6 +21,8 @@ help:
 pipeline-up:
 	$(COMPOSE) up -d --build
 
+
+
 pipeline-down:
 	@if output="$$( $(COMPOSE) down 2>&1 )"; then \
 		:; \
@@ -60,6 +62,20 @@ pipeline-clean:
 			exit $$status; \
 		fi; \
 	fi
+
+pipeline-start:
+	python -m spark_jobs.bronze.kafka_to_delta &
+	python -m spark_jobs.silver.clean_merge_stream &
+	python -m spark_jobs.gold.sentiment_enrichment &
+	python -m ingestion.reddit.producer &
+	python -m ingestion.youtube.producer &
+	python -m ingestion.news.producer &
+	wait
+
+spark-stop:
+	pkill -f spark || true
+	pkill -f pyspark || true
+	pkill -f java || true
 
 pipeline-reset-data:
 	@rm -rf \
