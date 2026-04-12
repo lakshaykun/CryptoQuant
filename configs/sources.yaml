@@ -37,8 +37,15 @@ news:
   feeds:
     - https://bitcoinmagazine.com/.rss/full/
     - https://news.bitcoin.com/feed/
+    - https://bitcoinmagazine.com/.rss/full/
+    - https://news.bitcoin.com/feed/
+    - https://cointelegraph.com/rss/
+    - https://www.coindesk.com/arc/outboundfeeds/rss/
+    - https://decrypt.co/feed              
+    - https://cryptoslate.com/feed/
+    - https://blockworks.co/feed
   currency: BTC
-  interval_seconds: 300
+  interval_seconds: 120
   engagement_weights:
     comments: 0.45
     keywords: 0.25
