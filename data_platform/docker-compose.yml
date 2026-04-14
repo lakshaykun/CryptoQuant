@@ -1,0 +1,137 @@
+# docker-compose.yml
+
+services:
+
+  # =========================
+  # 🟡 KAFKA
+  # =========================
+  kafka:
+    image: apache/kafka:3.7.0
+    container_name: crypto-kafka
+    ports:
+      - "9092:9092"
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    environment:
+      KAFKA_CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+
+      KAFKA_LISTENERS: PLAINTEXT://:9092,PLAINTEXT_INTERNAL://:29092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_INTERNAL://crypto-kafka:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT_INTERNAL
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+
+  topic-init:
+    image: apache/kafka:3.7.0
+    depends_on:
+      - kafka
+    command: >
+      sh -c "sleep 15 &&
+             /opt/kafka/bin/kafka-topics.sh --create --if-not-exists
+             --topic crypto_prices
+             --bootstrap-server crypto-kafka:29092
+             --partitions 3 --replication-factor 1"
+
+  # =========================
+  # 🔵 SPARK
+  # =========================
+  spark:
+    build:
+      context: ./data_platform
+      dockerfile: docker/spark/Dockerfile
+    container_name: spark
+    user: "0:0"
+    working_dir: /opt/app
+    command: tail -f /dev/null
+    restart: unless-stopped
+    environment:
+      - PYTHONPATH=/opt/app
+      - PATH=/opt/spark/bin:$PATH
+    volumes:
+      - ./data_platform:/opt/app
+      - spark-ivy:/home/spark/.ivy2
+
+  # =========================
+  # 🟢 AIRFLOW
+  # =========================
+  postgres:
+    image: postgres:15
+    container_name: airflow-postgres
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres-db-volume:/var/lib/postgresql/data
+  
+  airflow-webserver:
+    build:
+      context: ./data_platform
+      dockerfile: docker/airflow/Dockerfile
+    container_name: airflow-webserver
+    working_dir: /opt/app
+    user: "0:0"
+    depends_on:
+      - kafka
+      - spark
+      - postgres
+    ports:
+      - "8080:8080"
+    environment:
+      - AIRFLOW_HOME=/opt/airflow
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__CORE__DAGS_FOLDER=/opt/app/airflow/dags
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+      - PYTHONPATH=/opt/app
+    volumes:
+      - airflow-home:/opt/airflow
+      - ./data_platform/logs:/opt/airflow/logs
+      - ./data_platform:/opt/app
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: webserver
+
+  airflow-scheduler:
+    build:
+      context: ./data_platform
+      dockerfile: docker/airflow/Dockerfile
+    container_name: airflow-scheduler
+    working_dir: /opt/app
+    user: "0:0"
+    depends_on:
+      - airflow-webserver
+    environment:
+      - AIRFLOW_HOME=/opt/airflow
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__CORE__DAGS_FOLDER=/opt/app/airflow/dags
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+      - PYTHONPATH=/opt/app
+    volumes:
+      - airflow-home:/opt/airflow
+      - ./data_platform/logs:/opt/airflow/logs
+      - ./data_platform:/opt/app
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: scheduler
+  
+
+# =========================
+# 📦 VOLUMES
+# =========================
+volumes:
+  kafka-data:
+  postgres-db-volume:
+  airflow-home:
+  spark-ivy:

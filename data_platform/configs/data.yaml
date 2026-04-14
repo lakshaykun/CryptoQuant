@@ -1,0 +1,31 @@
+# configs/data.yaml
+
+interval: "1m"
+start_date: "2026-04-01"
+
+tables:
+    bronze_market:
+        "path": "/opt/app/delta/bronze/market/"
+        "partition_by": ["symbol", "date"]
+        "checkpoint": "/opt/app/delta/checkpoint/bronze/market/"
+
+    silver_market:
+        "path": "/opt/app/delta/silver/market/"
+        "partition_by": ["symbol", "date"]
+        "checkpoint": "/opt/app/delta/checkpoint/silver/market/"
+
+    gold_market:
+        "path": "/opt/app/delta/gold/market/"
+        "partition_by": ["symbol", "date"]
+        "checkpoint": "/opt/app/delta/checkpoint/gold/market/"
+
+    market_state:
+        "path": "/opt/app/delta/state/market/"
+
+raw_data_path:
+    market: "/opt/app/delta/raw_data/market/"
+
+
+symbols: ["BTCUSDT", "ETHUSDT"]
+
+binance_ws_uri: "wss://cryptoquantproducer.onrender.com/ws/binance/live?symbols=btcusdt,ethusdt&interval=1m"
