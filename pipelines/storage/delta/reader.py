@@ -53,7 +53,6 @@ def read_table(
 def read_incremental(
     spark: SparkSession,
     table_name: str,
-    open_time_col: str,
     last_value: Optional[datetime.datetime],
     symbols: Optional[List[str]] = None
 ) -> DataFrame:
@@ -68,7 +67,7 @@ def read_incremental(
 
         if last_value is not None:
             df = df.filter(F.col("date") >= F.to_date(F.lit(last_value)))
-            df = df.filter(F.col(open_time_col) > F.lit(last_value))
+            df = df.filter(F.col("open_time") > F.lit(last_value))
 
         if symbols is not None:
             df = df.filter(F.col("symbol").isin(symbols))
@@ -81,6 +80,34 @@ def read_incremental(
         logger.error(f"[{table_name}] Incremental read failed → {e}")
         raise
 
+def read_incremental_symbols(
+    spark: SparkSession,
+    table_name: str,
+    last_values: dict
+) -> DataFrame:
+    """
+    Reads only new data after last_value per symbol.
+    """
+
+    table_config = get_table_config(table_name, CONFIG)
+
+    try:
+        df = spark.read.format("delta").load(table_config["path"])
+
+        meta_df = spark.createDataFrame([
+            (symbol, ts) for symbol, ts in last_values.items()
+        ], ["symbol", "last_time"])
+
+        df = df.join(meta_df, "symbol") \
+            .filter(F.col("open_time") > F.col("last_time"))
+
+        logger.info(f"[{table_name}] Incremental read for symbols with last values")
+
+        return df
+
+    except Exception as e:
+        logger.error(f"[{table_name}] Incremental read failed → {e}")
+        raise
 
 # ---------------------------
 # 🔹 Time Travel (Delta Feature)
@@ -213,3 +240,16 @@ def get_last_open_time_symbols(
     except Exception as e:
         logger.warning(f"No existing bronze data found: {e}")
         return {symbol: start_date for symbol in symbols}
+    
+
+def check_table_exists(spark: SparkSession, table_name: str) -> bool:
+    '''Checks if Delta table exists.'''
+
+    table_config = get_table_config(table_name, CONFIG)
+
+    try:
+        spark.read.format("delta").load(table_config["path"]).limit(1).collect()
+        return True
+    except Exception as e:
+        logger.warning(f"Table {table_name} does not exist or is empty: {e}")
+        return False

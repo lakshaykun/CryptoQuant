@@ -2,24 +2,20 @@
 
 from datetime import datetime
 from pipelines.ingestion.batch.sources.market.binance_historical import fetch_coins_data
-from pipelines.storage.delta.reader import get_last_open_time_symbols
+from logging import Logger
 from pandas import DataFrame
 
 
 def fetch_market_historical_backfill(
-        symbols, 
-        interval, 
-        start_date, 
-        spark, 
-        logger
+        symbols: list, 
+        interval: str, 
+        last_open_time_symbols: dict, 
+        logger: Logger
 ) -> DataFrame:
     if not symbols:
         logger.info("No symbols to fetch.")
         return DataFrame()
     
-    start_date = datetime.strptime(start_date, "%Y-%m-%d")
-    last_open_time_symbols = get_last_open_time_symbols(spark, "bronze_market", symbols, start_date)
-
     end_date = datetime.now()
 
     pdf = fetch_coins_data(symbols, interval, last_open_time_symbols, end_date, logger)

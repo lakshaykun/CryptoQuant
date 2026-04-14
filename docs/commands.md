@@ -29,3 +29,29 @@ docker exec -it crypto-kafka /opt/kafka/bin/kafka-console-consumer.sh \
   --topic crypto_prices \
   --from-beginning \
   --bootstrap-server localhost:9092
+
+
+### Starting airflow
+mkdir -p logs
+sudo chown -R 50000:0 logs
+
+clear
+docker compose down -v
+docker compose build
+docker compose up --build -d
+docker ps -a
+
+docker ps
+  airflow-webserver
+  airflow-scheduler
+  spark-master
+  spark-worker
+  crypto-kafka
+
+http://localhost:8080 - airflow / airflow
+
+sudo chown -R $USER:$USER .
+
+### Streaming job
+docker exec -it spark-master \
+spark-submit pipelines/ingestion/streaming/spark/spark_streaming.py

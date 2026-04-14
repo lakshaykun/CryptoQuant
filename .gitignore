@@ -46,8 +46,8 @@ datasets/
 # =========================
 # Medallion architecture data (delta lake)
 # =========================
-medallion/checkpoints
-medallion/**/_last_checkpoint
+delta/checkpoints
+delta/**/_last_checkpoint
 
 
 # If you want to keep small sample data, uncomment:

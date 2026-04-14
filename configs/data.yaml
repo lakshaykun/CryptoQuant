@@ -3,22 +3,24 @@
 interval: "1m"
 start_date: "2026-04-01"
 
-
 tables:
     bronze_market:
-        "path": "medallion/bronze/market/"
+        "path": "/opt/app/delta/bronze/market/"
         "partition_by": ["symbol", "date"]
-        "checkpoint": "medallion/checkpoint/bronze/market/"
+        "checkpoint": "/opt/app/delta/checkpoint/bronze/market/"
 
     silver_market:
-        "path": "medallion/silver/market/"
+        "path": "/opt/app/delta/silver/market/"
         "partition_by": ["symbol", "date"]
-        "checkpoint": "medallion/checkpoint/silver/market/"
+        "checkpoint": "/opt/app/delta/checkpoint/silver/market/"
 
     gold_market:
-        "path": "medallion/gold/market/"
+        "path": "/opt/app/delta/gold/market/"
         "partition_by": ["symbol", "date"]
-        "checkpoint": "medallion/checkpoint/gold/market/"
+        "checkpoint": "/opt/app/delta/checkpoint/gold/market/"
+
+    market_state:
+        "path": "/opt/app/delta/state/market/"
 
 
 symbols: ["BTCUSDT", "ETHUSDT"]

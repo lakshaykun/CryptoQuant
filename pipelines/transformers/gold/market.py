@@ -129,8 +129,7 @@ class GoldMarketTransformer:
         # Load historical silver
         historical_df = read_incremental(
             spark, 
-            "silver_market", 
-            "open_time", 
+            "silver_market",  
             min_fetch_time
         )
 
