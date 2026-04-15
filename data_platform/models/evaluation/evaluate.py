@@ -1,13 +1,14 @@
 import numpy as np
-from models.config.model_config import FEATURE_COLUMNS, TARGET_COLUMN
 from models.evaluation.metrics import rmse
 from models.evaluation.backtesting import backtest
+from utils.config_loader import load_config
+
 
 def evaluate_model(model, df):
     df = df.copy()
-
-    X = df[FEATURE_COLUMNS]
-    y = df[TARGET_COLUMN]
+    model_config = load_config("configs/model.yaml")
+    X = df[model_config["features"]]
+    y = df[model_config["target"]]
 
     preds = model.predict(X)
 

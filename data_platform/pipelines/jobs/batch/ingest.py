@@ -4,8 +4,8 @@ from datetime import datetime
 from pyspark.sql import SparkSession
 from pipelines.schema.state.market import STATE_MARKET_SCHEMA
 from pipelines.storage.delta.reader import get_last_open_time_symbols
-from pipelines.utils.logger import get_logger
-from pipelines.utils.config_loader import load_config
+from utils.logger import get_logger
+from utils.config_loader import load_config
 from pipelines.ingestion.batch.jobs.market.fetch_historical import fetch_market_historical
 from pipelines.storage.delta.writer import write_batch
 

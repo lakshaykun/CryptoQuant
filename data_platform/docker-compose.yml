@@ -47,7 +47,6 @@ services:
   # =========================
   spark:
     build:
-      context: ./data_platform
       dockerfile: docker/spark/Dockerfile
     container_name: spark
     user: "0:0"
@@ -58,7 +57,7 @@ services:
       - PYTHONPATH=/opt/app
       - PATH=/opt/spark/bin:$PATH
     volumes:
-      - ./data_platform:/opt/app
+      - .:/opt/app
       - spark-ivy:/home/spark/.ivy2
 
   # =========================
@@ -78,7 +77,6 @@ services:
   
   airflow-webserver:
     build:
-      context: ./data_platform
       dockerfile: docker/airflow/Dockerfile
     container_name: airflow-webserver
     working_dir: /opt/app
@@ -98,14 +96,13 @@ services:
       - PYTHONPATH=/opt/app
     volumes:
       - airflow-home:/opt/airflow
-      - ./data_platform/logs:/opt/airflow/logs
-      - ./data_platform:/opt/app
+      - airflow-logs:/opt/airflow/logs
+      - .:/opt/app
       - /var/run/docker.sock:/var/run/docker.sock
     command: webserver
 
   airflow-scheduler:
     build:
-      context: ./data_platform
       dockerfile: docker/airflow/Dockerfile
     container_name: airflow-scheduler
     working_dir: /opt/app
@@ -121,11 +118,27 @@ services:
       - PYTHONPATH=/opt/app
     volumes:
       - airflow-home:/opt/airflow
-      - ./data_platform/logs:/opt/airflow/logs
-      - ./data_platform:/opt/app
+      - airflow-logs:/opt/airflow/logs
+      - .:/opt/app
       - /var/run/docker.sock:/var/run/docker.sock
     command: scheduler
   
+  # =========================
+  # 🟢 MLFLOW
+  # =========================
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:latest
+    container_name: mlflow
+    ports:
+      - "5000:5000"
+    command: >
+      mlflow server
+      --backend-store-uri sqlite:///mlflow.db
+      --default-artifact-root /mlflow/artifacts
+      --host 0.0.0.0
+      --port 5000
+    volumes:
+      - mlflow-data:/mlflow
 
 # =========================
 # 📦 VOLUMES
@@ -135,3 +148,5 @@ volumes:
   postgres-db-volume:
   airflow-home:
   spark-ivy:
+  airflow-logs:
+  mlflow-data:

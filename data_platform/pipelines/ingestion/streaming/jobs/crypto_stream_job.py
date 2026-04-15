@@ -4,8 +4,8 @@ import asyncio
 from pipelines.ingestion.streaming.sources.binance_source import BinanceSource
 from pipelines.ingestion.streaming.producers.kafka_producer import CryptoProducer
 from pipelines.transformers.raw.market import RawMarketTransformer
-from pipelines.utils.config_loader import load_config
-from pipelines.utils.logger import get_logger
+from utils.config_loader import load_config
+from utils.logger import get_logger
 
 logger = get_logger("stream_job")
 

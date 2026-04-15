@@ -6,7 +6,7 @@ from pipelines.storage.delta.reader import read_incremental_symbols, read_table,
 from pipelines.transformers.gold.market import GoldMarketTransformer
 from pipelines.storage.delta.writer import write_batch
 from pipelines.schema.gold.market import GOLD_MARKET_SCHEMA
-from pipelines.utils.logger import get_logger
+from utils.logger import get_logger
 
 
 def main():

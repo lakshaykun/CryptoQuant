@@ -2,7 +2,8 @@ FROM apache/airflow:2.9.1-python3.10
 
 USER airflow
 
-RUN pip install --no-cache-dir psycopg2-binary
+COPY docker/airflow/requirements.txt requirements.txt
+RUN pip install -r requirements.txt
 
 ENV AIRFLOW_HOME="/opt/app/.airflow"
 ENV PROJECT_ROOT="/opt/app"

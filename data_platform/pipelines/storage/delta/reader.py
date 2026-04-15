@@ -4,8 +4,8 @@ from typing import Optional, List
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql import functions as F
 from pipelines.storage.delta.utils import get_table_config
-from pipelines.utils.config_loader import load_config
-from pipelines.utils.logger import get_logger
+from utils.config_loader import load_config
+from utils.logger import get_logger
 
 logger = get_logger(__name__)
 

@@ -7,8 +7,8 @@ from pipelines.schema.raw.market import RAW_MARKET_SCHEMA
 from pipelines.storage.delta.writer import write_batch
 from pipelines.transformers.bronze.market import BronzeMarketTransformer
 from pipelines.schema.bronze.market import BRONZE_MARKET_SCHEMA
-from pipelines.utils.logger import get_logger
-from pipelines.utils.config_loader import load_config
+from utils.logger import get_logger
+from utils.config_loader import load_config
 from pipelines.storage.local.csv import read_csv
 
 

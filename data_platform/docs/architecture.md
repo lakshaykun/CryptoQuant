@@ -1,269 +1,228 @@
 # CryptoQuant Architecture
 
-CryptoQuant is a Binance market MLOps stack built around a medallion Delta Lake layout, Spark-based transforms, a lightweight model-training workflow, and two serving surfaces: a public WebSocket proxy and an internal FastAPI prediction API.
+CryptoQuant is a Binance market MLOps workspace built around batch backfills, live streaming ingestion, Spark + Delta Lake medallion tables, pandas/XGBoost model training, and FastAPI serving.
 
-## System Overview
+## Architecture Tree
 
 ```mermaid
 flowchart LR
-    A[Binance REST / WebSocket] --> B[Render API proxy]
-    A --> C[Batch backfill jobs]
-    B --> D[Kafka topic crypto_prices]
-    C --> E[Bronze Delta]
-    D --> F[Spark Structured Streaming]
-    F --> E
-    E --> G[Silver Delta]
-    G --> H[Gold Delta]
-    H --> I[models/ training and evaluation]
-    H --> J[api/ online prediction]
+    Binance[Binance REST / Vision ZIPs / WebSocket]
+    Airflow[Airflow DAGs]
+    BatchJobs[Batch ingestion jobs]
+    StreamJob[Streaming ingest job]
+    Kafka[Kafka crypto_prices]
+    SparkStream[Spark streaming consumer]
+    RawStage[Raw CSV staging]
+    Bronze[Delta Bronze]
+    Silver[Delta Silver]
+    Gold[Delta Gold]
+    State[Delta State]
+    ModelData[models/data loader]
+    Train[Training and evaluation]
+    ModelArtifact[models/artifacts/models/model.pkl]
+    FeatureBuild[models/features/build_features.py]
+    API[FastAPI /predict routes]
+
+    Airflow --> BatchJobs
+    Airflow --> Train
+
+    Binance --> BatchJobs --> RawStage --> Bronze --> Silver --> Gold --> ModelData --> Train --> ModelArtifact --> API
+    Binance --> StreamJob --> Kafka --> SparkStream --> Bronze
+    Gold --> FeatureBuild --> API
+    State --> BatchJobs
 ```
 
-The design keeps batch and streaming feeds on the same medallion contract so the model layer and API layer can reuse the same feature definitions.
+The batch path lands historical Binance candles in local CSV staging, then writes Bronze, Silver, and Gold Delta tables. The streaming path pushes live rows through Kafka and uses Spark Structured Streaming to write the same medallion layers. Training and serving both reuse the Gold feature contract.
 
-## Ingestion Paths
+## File System Tree
 
-### Batch
+The tree below is truncated to the directories and files that define the current implementation. Transient cache files are omitted.
 
-The batch path starts from `scripts/run_batch.py`, which calls `pipelines/orchestration/batch_pipeline.py`.
+```text
+.
+├── README.md  # project overview
+├── docker-compose.yml  # local service stack
+├── .env  # local environment values
 
-1. `pipelines/ingestion/batch/jobs/market/backfill_historical.py` determines the last ingested candle per symbol.
-2. `pipelines/ingestion/batch/sources/market/binance_historical.py` downloads the missing Binance vision ZIP files and returns pandas DataFrames.
-3. `pipelines/transformers/bronze/market.py` converts the result into the Bronze Spark schema.
-4. `pipelines/transformers/silver/market.py` cleans and standardizes the rows.
-5. `pipelines/transformers/gold/market.py` generates the feature table.
-6. `pipelines/storage/delta/writer.py` persists each layer using the configured Delta path and partitioning.
+├── airflow/  # orchestration
+│   ├── README.md  # Airflow notes
+│   └── dags/
+│       ├── batch_data_pipeline.py  # batch DAG
+│       └── model_training_pipeline.py  # training DAG
 
-### Streaming
-
-The streaming path is split into an upstream transport service and the Spark consumer.
-
-1. `render_api/app/main.py` exposes WebSocket endpoints for backfill and live streaming.
-2. `render_api/app/binance_ws.py` connects to Binance and emits closed kline events.
-3. `pipelines/ingestion/streaming/jobs/crypto_stream_job.py` forwards the raw rows to Kafka through `pipelines/ingestion/streaming/producers/kafka_producer.py`.
-4. `pipelines/ingestion/streaming/spark/spark_streaming.py` reads Kafka, parses the payload, and writes Bronze, Silver, and Gold micro-batches.
-5. The Gold streaming transform recomputes lag and rolling features using recent Silver history so feature windows stay correct.
-
-## Medallion Contract
-
-- Bronze stores normalized raw candles with ingestion metadata.
-- Silver stores cleaned market rows with type enforcement and business-rule filtering.
-- Gold stores the feature-ready rows used by training and inference.
-- Partitioning is centered on `symbol` and `date` to keep reads and writes predictable.
-
-This contract should remain stable even if new exchanges, symbols, or horizons are added later.
-
-## Model Lifecycle
-
-The modeling layer lives in `models/`.
-
-1. Curated market data is loaded into pandas for training.
-2. The schema is validated before any fitting occurs.
-3. Data is split in time order so the holdout reflects the market setting.
-4. `models/training/trainer.py` fits the model using the configured feature columns.
-
-## Serving Contracts
-
-The API has two prediction modes.
-
-- `/predict/base` accepts raw OHLCV rows and builds features internally before scoring.
-- `/predict/engineered` accepts precomputed feature rows and scores them directly.
-
-Both routes should receive pandas DataFrames before scoring. That keeps the HTTP layer thin and ensures feature engineering stays inside the model pipeline instead of being duplicated in request handlers.
-
-## Configuration
-
-- `configs/data.yaml` defines symbols, interval, historical backfill start date, Delta table paths, and the upstream WebSocket URI.
-- `configs/spark.yaml` defines the local Spark session and Delta tuning.
-- `configs/kafka.yaml` defines the broker aliases and topic settings used by streaming ingestion.
-
-These files are the first place to update when a deployment target or data source changes.
-
-## Current Implementation Notes
-
-- Delta writers support upserts keyed by `symbol` and `open_time`.
-- The `medallion/` directory is the storage contract; keep code and docs aligned with it.
-
-## Future Roadmap
-
-- Move toward feature-store-like governance if multiple model families or horizons are introduced.
-- Add more observability around streaming retries, Kafka lag, and Spark micro-batch health.
-- Introduce CI coverage for the feature engineering and validation layers so contract drift is caught earlier.
-
-
-├── README.md
-├── requirements.txt
-├── docker-compose.yml
-│   ├── airflow.yaml
-│   └── model.yaml
-│
-├── datasets/                     # (optional local dev only)
-│
-├── pipelines/                # core data pipelines
-│
-├── medallion/               # data lake structure (Delta Lake)
-│   ├── bronze/
-│   │   ├── market/
-│   │   └── articles/
-│   ├── silver/
-│   └── gold/
-│
-├── models/                  # ML logic
-│
-├── notebooks/              # experimentation (optional)
-│   ├── eda.ipynb
-│   └── experiments.ipynb
-│
-├── airflow/                # orchestration
-│   ├── dags/
-│   │   ├── training_dag.py
-│   │   ├── retraining_dag.py
-│   │   └── drift_dag.py
-│   │
-│   ├── plugins/
-│   └── requirements.txt
-│
-├── api/                    # model serving
-│   ├── app.py              # FastAPI entry
-│   ├── routes/
-│   │   ├── predict.py
-│   │   └── health.py
-│   │
-│   ├── services/
-│   │   ├── inference.py
-│   │   └── model_loader.py
-│   │
+├── api/  # prediction service
+│   ├── README.md  # API notes
+│   ├── app.py  # FastAPI app
 │   └── schemas/
-│       └── request.py
-│
-├── monitoring/             # observability
-│   ├── drift.py
-│   ├── metrics.py
-│   └── alerts.py
-│
-├── tests/                  # unit + integration tests
-│   ├── test_pipeline.py
-│   ├── test_model.py
-│   └── test_api.py
-│
-├── scripts/                # utility scripts
-│   ├── start_kafka.sh
-│   ├── start_spark.sh
-│   └── run_pipeline.sh
-│
-├── ci-cd/                  # CI/CD configs
-│   └── github/
-│       └── workflows/
-│           └── ci.yml
-│
-└── docs/                   # documentation
-    ├── architecture.md
-    └── setup.md
+│       ├── model.py  # shared Pydantic models
+│       └── request.py  # request payload models
 
+├── configs/  # runtime config
+│   ├── README.md  # config notes
+│   ├── data.yaml  # data paths and symbols
+│   ├── kafka.yaml  # Kafka settings
+│   ├── model.yaml  # model settings
+│   └── spark.yaml  # Spark settings
 
-## Models
-models/
-│
-├── config/
-│   └── model_config.py
-│
-├── data/
-│   ├── loader.py          # read from Silver
-│   └── schema.py          # expected columns
-│
-├── features/
-│   ├── build_features.py      # feature engineering logic
-│   └── scaling.py             # normalization / scaling
-├── training/
-│   ├── train.py
-│   ├── trainer.py
-│   └── hyperparameter_tuning.py
-│
-├── evaluation/
-│   ├── evaluate.py
-│   ├── backtesting.py
-│   └── metrics.py
-│
-├── inference/
-│   ├── realtime.py        # Kafka/Spark inference
-│   └── pipeline.py
-│
-├── registry/
-│   ├── mlflow_registry.py
-│   └── model_loader.py
-│
-└── artifacts/
-    ├── models/                # saved models
-    └── scalers/
+├── data_platform/  # runtime logs mount
+│   └── logs/  # container log target
 
+├── delta/  # Delta Lake tables
+│   ├── bronze/
+│   │   └── market/  # bronze market data
+│   ├── gold/
+│   │   └── market/  # gold feature data
+│   ├── raw_data/
+│   │   └── market/  # raw CSV staging
+│   ├── silver/
+│   │   └── market/  # silver cleaned data
+│   └── state/
+│       └── market/  # incremental state
 
+├── docker/  # container images
+│   ├── airflow/
+│   │   ├── Dockerfile  # Airflow image
+|   |   ├── requirements.txt  # Airflow dependencies
+│   │   └── entrypoint.sh  # Airflow entrypoint
+│   └── spark/
+│       ├── requirements.txt  # Spark dependencies
+│       └── Dockerfile  # Spark image
 
-# Pipelines
-pipelines/
-│
-├── ingestion/                      # DATA ENTRY POINTS
-│   ├── batch/
-│   │   ├── market.py              # batch crypto ingestion pipeline
-│   │   ├── sentiment.py           # batch news/reddit ingestion
-│   │   ├── fetch_coins.py         # Binance downloader (your code)
-│   │   └── utils.py               # date utils, incremental logic
-│   │
-│   ├── streaming/
-│
-├── bronze/                        # RAW DATA WRITING LAYER
-│   ├── market.py                 # write_to_bronze (your code)
-│   ├── sentiment.py              # write sentiment data
-│   ├── utils.py                  # merge helpers, partitioning
-│   └── schema.py                 # MARKET_SCHEMA (important)
-│
-├── silver/                        # CLEANED + STANDARDIZED DATA
-│   ├── market.py                 # cleaning, dedup, casting
-│   ├── sentiment.py              # NLP cleaning
-│   ├── joins.py                  # merge market + sentiment
-│   └── utils.py                  # validation helpers
-│
-├── gold/                          # FEATURE ENGINEERING
-│   ├── market_features.py        # returns, volatility, indicators
-│   ├── sentiment_features.py     # sentiment scores aggregation
-│   ├── feature_store.py          # final ML-ready dataset
-│   └── utils.py
-│
-├── orchestration/                 # PIPELINE EXECUTION LOGIC
-│   ├── batch_pipeline.py         # bronze → silver → gold (batch)
-│   ├── streaming_pipeline.py     # streaming end-to-end
-│   └── scheduler.py              # cron / airflow hooks
-│
-├── validation/                    # DATA QUALITY (VERY IMPORTANT)
-│   ├── market.py                 # schema + null checks
-│   ├── sentiment.py
-│   └── expectations.py           # reusable rules
-│
-├── state/                         # INCREMENTAL STATE MANAGEMENT
-│   ├── market_state.py           # last timestamp logic
-│   └── state_store.py            # file/db abstraction
-│
-└── utils/                         # SHARED UTILITIES
-    ├── logger.py
-    ├── config_loader.py          # load YAML configs
-    ├── spark.py                  # Spark session builder
-    └── helpers.py
+├── docs/  # documentation
+│   ├── architecture.md  # architecture doc
+│   ├── commands.md  # run commands
+│   └── data/
+│       ├── binance.md  # Binance notes
+│       └── storage.md  # storage notes
 
+├── logs/  # Airflow logs
+│   ├── dag_id=batch_data_pipeline/  # batch DAG logs
+│   ├── dag_processor_manager/  # DAG parser logs
+│   └── scheduler/  # scheduler logs
 
-pipelines/ingestion/streaming/
-│
-├── sources/
-│   ├── websocket_client.py
-│   └── binance_source.py
-│
-├── producers/
-│   └── kafka_producer.py
-│
-├── processors/
-│   ├── validator.py
-│   ├── transformer.py
-│   └── enricher.py
-│
-├── jobs/
-│   └── crypto_stream_job.py
-│
-└── spark/
-    └── spark_streaming.py
+├── models/  # ML package
+│   ├── README.md  # model notes
+│   ├── artifacts/
+│   │   └── models/  # saved models
+│   ├── data/
+│   │   ├── loader.py  # load training data
+│   │   ├── schema.py  # validate data schema
+│   │   └── splitter.py  # time split helper
+│   ├── evaluation/
+│   │   ├── backtesting.py  # backtest logic
+│   │   ├── evaluate.py  # model evaluation
+│   │   └── metrics.py  # metric helpers
+│   ├── features/
+│   │   └── build_features.py  # pandas features
+│   ├── inference/
+│   │   ├── pipeline.py  # inference pipeline
+│   │   └── realtime.py  # runtime predictor
+│   ├── registry/
+│   │   ├── mlflow_registery.py  # MLflow logging
+│   │   └── model_loader.py  # local model loader
+│   ├── targets/  # target definitions
+│   └── training/
+│       ├── hyperparameter_tuning.py  # tuning helper
+│       ├── train.py  # train entrypoint
+│       └── trainer.py  # model trainer
+
+├── notebooks/  # exploration notebooks
+│   ├── data_ingest.ipynb  # ingest notebook
+│   └── model.ipynb  # model notebook
+
+├── pipelines/  # data pipeline code
+│   ├── README.md  # pipeline notes
+│   ├── ingestion/
+│   │   ├── batch/
+│   │   │   ├── jobs/
+│   │   │   │   └── market/
+│   │   │   │       ├── fetch_historical.py  # historical fetcher
+│   │   │   │       └── fetch_today.py  # live-day fetcher
+│   │   │   └── sources/
+│   │   │       └── market/
+│   │   │           ├── binance_historical.py  # Binance ZIP source
+│   │   │           └── binance_today.py  # Binance daily source
+│   │   └── streaming/
+│   │       ├── jobs/
+│   │       │   └── crypto_stream_job.py  # stream producer job
+│   │       ├── producers/
+│   │       │   └── kafka_producer.py  # Kafka producer
+│   │       ├── sources/
+│   │       │   ├── binance_source.py  # WebSocket source
+│   │       │   └── websocket_client.py  # WS reconnect client
+│   │       ├── spark/
+│   │       │   └── spark_streaming.py  # Spark stream job
+│   │       └── utils/
+│   │           └── helpers.py  # Kafka parsing helper
+│   ├── jobs/
+│   │   └── batch/
+│   │       ├── bronze.py  # bronze job
+│   │       ├── cleanup_raw.py  # raw cleanup job
+│   │       ├── gold.py  # gold job
+│   │       ├── ingest.py  # ingest job
+│   │       ├── silver.py  # silver job
+│   │       └── utils.py  # batch helpers
+│   ├── schema/
+│   │   ├── bronze/
+│   │   │   └── market.py  # bronze schema
+│   │   ├── gold/
+│   │   │   └── market.py  # gold schema
+│   │   ├── raw/
+│   │   │   └── market.py  # raw schema
+│   │   ├── silver/
+│   │   │   └── market.py  # silver schema
+│   │   ├── state/
+│   │   │   └── market.py  # state schema
+│   │   └── validation.py  # schema checks
+│   ├── storage/
+│   │   ├── delta/
+│   │   │   ├── reader.py  # Delta reader
+│   │   │   ├── utils.py  # Delta helpers
+│   │   │   └── writer.py  # Delta writer
+│   │   └── local/
+│   │       └── csv.py  # CSV helper
+│   ├── transformers/
+│   │   ├── bronze/
+│   │   │   └── market.py  # bronze transform
+│   │   ├── gold/
+│   │   │   └── market.py  # gold transform
+│   │   ├── raw/
+│   │   │   └── market.py  # raw transform
+│   │   └── silver/
+│   │       └── market.py  # silver transform
+│   ├── utils/
+│   │   └── spark.py  # Spark builder
+│   └── validation/
+│       └── validation.py  # validation rules
+
+├── scripts/  # convenience launchers
+│   ├── README.md  # script notes
+│   └── run_api.sh  # API launcher
+
+└── utils/  # shared helpers
+    ├── config_loader.py  # YAML loader
+    └── logger.py  # logger helper
+```
+
+## Tech Stack
+
+- Python 3.10 for the application code, batch jobs, and Airflow workers.
+- Apache Airflow 2.9.1 for orchestration of the batch medallion flow and training flow.
+- Apache Spark 3.5.0 for local batch processing and Spark Structured Streaming.
+- Delta Lake via `delta-spark` and `deltalake` for Bronze, Silver, Gold, and state tables.
+- Apache Kafka 3.7.0 for live market event transport.
+- FastAPI, Pydantic, and Uvicorn for the prediction API.
+- Pandas and NumPy for model-side feature handling and inference preprocessing.
+- XGBoost, scikit-learn, joblib, and MLflow for training, evaluation, artifact loading, and logging.
+- websockets and requests for Binance live and historical ingestion.
+- PyYAML for configuration loading from `configs/*.yaml`.
+- PostgreSQL 15 with `psycopg2-binary` for the Airflow metadata database.
+- Docker and Docker Compose for local service orchestration.
+
+## Current Runtime State
+
+- `delta/bronze/market/`, `delta/silver/market/`, and `delta/gold/market/` currently contain `_delta_log/` metadata and symbol partitions for `BTCUSDT` and `ETHUSDT`.
+- `delta/state/market/` is currently empty.
+- `logs/` contains DAG, scheduler, and processor-manager runtime logs.
+- `data_platform/logs/` is present as the mounted log directory used by the Compose stack.
+- The API is launched from `scripts/run_api.sh`, which sources the local virtual environment when available and runs `uvicorn api.app:app`.

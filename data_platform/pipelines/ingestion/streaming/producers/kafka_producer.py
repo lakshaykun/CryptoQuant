@@ -4,7 +4,7 @@ import os
 
 from kafka import KafkaProducer
 import json
-from pipelines.utils.config_loader import load_config
+from utils.config_loader import load_config
 
 class CryptoProducer:
     def __init__(self, config_path="configs/kafka.yaml"):

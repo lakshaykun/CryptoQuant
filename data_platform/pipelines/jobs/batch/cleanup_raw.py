@@ -1,8 +1,8 @@
 # pipelines/jobs/batch/cleanup_raw.py
 
 from pipelines.storage.local.csv import clean_raw_csv
-from pipelines.utils.config_loader import load_config
-from pipelines.utils.logger import get_logger
+from utils.config_loader import load_config
+from utils.logger import get_logger
 
 
 def cleanup_task():

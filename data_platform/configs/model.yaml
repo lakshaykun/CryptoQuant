@@ -1,0 +1,95 @@
+# configs/model.yaml
+
+expected_columns : [
+    'open_time',
+    'symbol',
+
+    'open',
+    'high',
+    'low',
+    'close',
+    'volume',
+    'trades',
+    'taker_buy_base',
+    
+    'log_return',
+    'volatility',
+
+    'imbalance_ratio',
+    'buy_ratio',
+    
+    'log_return_lag1',
+    'log_return_lag2',
+    'buy_ratio_lag1',
+
+    'ma_5',
+    'ma_20',
+
+    'volatility_5',
+    'volume_5',
+    'buy_ratio_5',
+
+    'momentum',
+    'volume_spike',
+    'price_range_ratio',
+    'body_size',
+
+    'hour',
+    'day_of_week',
+    
+    'trend_strength',
+    'volatility_ratio'
+]
+
+features : [
+    'symbol',
+
+    'open',
+    'high',
+    'low',
+    'close',
+    'volume',
+    'trades',
+    'taker_buy_base',
+    
+    'log_return',
+    'volatility',
+
+    'imbalance_ratio',
+    'buy_ratio',
+    
+    'log_return_lag1',
+    'log_return_lag2',
+    'buy_ratio_lag1',
+
+    'ma_5',
+    'ma_20',
+
+    'volatility_5',
+    'volume_5',
+    'buy_ratio_5',
+
+    'momentum',
+    'volume_spike',
+    'price_range_ratio',
+    'body_size',
+
+    'hour',
+    'day_of_week',
+    
+    'trend_strength',
+    'volatility_ratio'
+]
+
+target: "log_return_lead1"
+
+model_params: 
+    n_estimators: 100
+    max_depth: 6
+    learning_rate: 0.05
+
+test_split_ratio: 0.2
+
+model_path: "models/artifacts/models/model.pkl"
+
+train_data_path: "models/artifacts/train_data.parquet"

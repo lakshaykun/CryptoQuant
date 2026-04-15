@@ -50,7 +50,10 @@ docker ps
 
 http://localhost:8080 - airflow / airflow
 
+
+### To reset permissions if needed
 sudo chown -R $USER:$USER .
+
 
 ### Streaming job
 docker exec -it spark-master \

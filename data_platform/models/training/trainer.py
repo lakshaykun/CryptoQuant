@@ -1,14 +1,20 @@
 from xgboost import XGBRegressor
-from models.config.model_config import FEATURE_COLUMNS, TARGET_COLUMN, MODEL_PARAMS
+import pandas as pd
 
 class Trainer:
-    def train(self, df):
+    def __init__(self, config, logger):
+        self.config = config
+        self.logger = logger
+
+    def train(self, df: pd.DataFrame):
         df = df.copy()
 
-        X = df[FEATURE_COLUMNS]
-        y = df[TARGET_COLUMN]
+        X = df[self.config.get("features")]
+        y = df[self.config.get("target")]
 
-        model = XGBRegressor(**MODEL_PARAMS)
+        params = self.config.get("model_params", {})
+        
+        model = XGBRegressor(**params)
         model.fit(X, y)
 
         return model

@@ -1,5 +1,5 @@
 from models.config.model_config import FEATURE_COLUMNS
-from models.features.build_features import build_features
+from models.features.feature_engineering import build_features
 
 class InferencePipeline:
     def __init__(self, model):
