@@ -1,7 +1,7 @@
 # configs/data.yaml
 
 interval: "1m"
-start_date: "2026-04-01"
+start_date: "2026-01-01"
 
 tables:
     bronze_market:
@@ -26,6 +26,6 @@ raw_data_path:
     market: "/opt/app/delta/raw_data/market/"
 
 
-symbols: ["BTCUSDT", "ETHUSDT"]
+symbols: ["BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT", "USDCUSDT"]
 
 binance_ws_uri: "wss://cryptoquantproducer.onrender.com/ws/binance/live?symbols=btcusdt,ethusdt&interval=1m"

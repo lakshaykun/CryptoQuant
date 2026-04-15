@@ -1,11 +1,9 @@
 # models/training/train.py
 
-import joblib
 from models.data.splitter import time_split
 from models.training.trainer import Trainer
-from models.evaluation.evaluate import evaluate_model
-from utils.logger import get_logger
-from utils.config_loader import load_config
+from utils_global.logger import get_logger
+from utils_global.config_loader import load_config
 import pandas as pd
 
 logger = get_logger(__name__)
@@ -22,13 +20,6 @@ def train_model():
     train_df, test_df = time_split(df)
 
     trainer = Trainer(config, logger)
-    model = trainer.train(train_df)
+    trainer.train(train_df, test_df)
 
-    evaluate_model(model, test_df)
-
-    joblib.dump(model, config["model_path"])
-
-    logger.info(f"Model trained and saved to {config['model_path']}")
-
-if __name__ == "__main__":
-    train_model()
+    logger.info(f"Models trained and registered successfully")

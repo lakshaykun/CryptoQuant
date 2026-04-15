@@ -5,7 +5,7 @@ from pipelines.storage.delta.reader import read_incremental_symbols, read_table,
 from pipelines.transformers.silver.market import SilverMarketTransformer
 from pipelines.storage.delta.writer import write_batch
 from pipelines.schema.silver.market import SILVER_MARKET_SCHEMA
-from utils.logger import get_logger
+from utils_global.logger import get_logger
 
 
 def main():
@@ -32,6 +32,10 @@ def main():
         )
 
         df = SilverMarketTransformer.transform(df)
+
+        if df is None or df.rdd.isEmpty():
+            logger.info("No new data to process, skipping write")
+            return
 
         write_batch(df, "silver_market", SILVER_MARKET_SCHEMA)
 

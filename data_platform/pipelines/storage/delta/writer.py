@@ -5,8 +5,8 @@ from typing import Optional
 from pyspark.sql import DataFrame
 from pyspark.sql.types import StructType
 
-from utils.logger import get_logger
-from utils.config_loader import load_config
+from utils_global.logger import get_logger
+from utils_global.config_loader import load_config
 from pipelines.schema.validation import validate_schema
 from pipelines.storage.delta.utils import get_table_config, add_metadata, validate_partitions
 from delta.tables import DeltaTable

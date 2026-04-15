@@ -1,8 +1,8 @@
 # models/data/loader.py
 
 from deltalake import DeltaTable
-from utils.logger import get_logger
-from utils.config_loader import load_config
+from utils_global.logger import get_logger
+from utils_global.config_loader import load_config
 
 logger = get_logger(__name__)
 data_config = load_config("configs/data.yaml")

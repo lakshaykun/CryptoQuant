@@ -14,11 +14,14 @@ from pipelines.storage.local.csv import (
 
 BASE_URL = "https://data.binance.vision/data/spot/daily/klines"
 
-COLUMNS = [
+SOURCE_COLUMNS = [
     'open_time', 'open', 'high', 'low', 'close', 'volume',
     'close_time', 'quote_volume', 'trades',
     'taker_buy_base', 'taker_buy_quote', 'ignore'
 ]
+
+RAW_MARKET_COLUMNS = ['symbol', 'open_time', 'close_time', 'open', 'high', 'low', 'close', 'volume',
+                      'quote_volume', 'trades', 'taker_buy_base', 'taker_buy_quote']
 
 
 def fetch_single_day(symbol, interval, single_date, base_path, logger):
@@ -44,12 +47,9 @@ def fetch_single_day(symbol, interval, single_date, base_path, logger):
 
         with zipfile.ZipFile(io.BytesIO(response.content)) as z:
             with z.open(z.namelist()[0]) as f:
-                df = pd.read_csv(f, header=None)
-
-                df = df.iloc[:, :12]
-                df.columns = COLUMNS
+                df = pd.read_csv(f, header=None, names=SOURCE_COLUMNS)
                 df["symbol"] = symbol
-
+                df = df[RAW_MARKET_COLUMNS]
                 save_csv(df, file_path)
 
         logger.info(f"💾 Saved: {filename}")
