@@ -107,7 +107,7 @@ class Trainer:
         return model
     
     def _train_catboost(self, X_train, y_train, X_test, y_test, params):
-        model = CatBoostRegressor(**params)
+        model = CatBoostRegressor(**params, allow_writing_files=False)
         model.fit(X_train, y_train, eval_set=(X_test, y_test), use_best_model=True, early_stopping_rounds=50,)
         return model
     

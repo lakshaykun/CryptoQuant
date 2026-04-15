@@ -34,7 +34,7 @@ docker exec -it crypto-kafka /opt/kafka/bin/kafka-console-consumer.sh \
 ### Starting data_platform
 ```
 clear
-docker compose down -v
+docker compose down
 docker compose build
 docker compose up --build -d
 docker ps -a
