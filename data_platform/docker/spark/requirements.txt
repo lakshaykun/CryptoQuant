@@ -3,3 +3,9 @@ pandas
 numpy
 requests
 deltalake
+kafka-python
+feedparser
+beautifulsoup4
+curl-cffi
+google-api-python-client
+delta-spark==3.1.0

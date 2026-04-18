@@ -115,14 +115,19 @@ class GoldMarketTransformer:
     @staticmethod
     def process_gold_stream_batch(
         df: SparkDataFrame,
-        epoch_id: int
+        _epoch_id: int | None = None
     ):
         """
         For stream pipelines, we need to load historical silver data to calculate features that require past values (e.g. moving averages, lags). This function handles that logic.
         """
+        if df is None:
+            return None
+
         spark = df.sparkSession
         # get minimum open_time in the batch
         min_open_time = df.select(F.min("open_time")).first()[0]
+        if min_open_time is None:
+            return df.limit(0)
 
         min_fetch_time = min_open_time - timedelta(minutes=30)
 
@@ -133,7 +138,8 @@ class GoldMarketTransformer:
             min_fetch_time
         )
 
-        historical_df = historical_df.drop("ingestion_time")
+        if "ingestion_time" in historical_df.columns:
+            historical_df = historical_df.drop("ingestion_time")
 
         historical_df = historical_df.join(
             df.select("symbol").distinct(),

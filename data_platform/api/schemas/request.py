@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List
 
 
@@ -64,3 +64,12 @@ class CryptoEngineeredFeatures(BaseModel):
 
 class PredictEngineeredRequest(BaseModel):
     data: List[CryptoEngineeredFeatures]
+
+
+class SentimentPredictRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=5000)
+
+
+class SentimentPredictResponse(BaseModel):
+    label: str
+    confidence: float

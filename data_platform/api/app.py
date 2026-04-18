@@ -1,8 +1,13 @@
 import numpy as np
 import pandas as pd
 from fastapi import FastAPI, HTTPException
-from models.inference.realtime import RealtimePredictor
-from api.schemas.request import CryptoFeatures, PredictEngineeredRequest
+from api.cryptobert_service import predict_cryptobert_sentiment
+from api.schemas.request import (
+    CryptoFeatures,
+    PredictEngineeredRequest,
+    SentimentPredictRequest,
+    SentimentPredictResponse,
+)
 
 app = FastAPI(
     title="CryptoQuant",
@@ -15,8 +20,30 @@ def health_check():
     return {
         "status": "running"
     }
+
+
+@app.post("/predict", response_model=SentimentPredictResponse)
+def predictSentiment(data: SentimentPredictRequest):
+    text = data.text.strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Text cannot be empty")
+
+    try:
+        prediction = predict_cryptobert_sentiment(text)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    return SentimentPredictResponse(**prediction)
+
+
 @app.post("/predict/base")
 def predictBase(data: list[CryptoFeatures]):
+    try:
+        from models.inference.realtime import RealtimePredictor
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Predictor import failed: {exc}") from exc
 
     predictor = RealtimePredictor()
 
@@ -47,6 +74,10 @@ def predictBase(data: list[CryptoFeatures]):
 
 @app.post("/predict/engineered")
 def predictEngineered(data: PredictEngineeredRequest):
+    try:
+        from models.inference.realtime import RealtimePredictor
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Predictor import failed: {exc}") from exc
 
     predictor = RealtimePredictor()
 

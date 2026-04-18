@@ -1,0 +1,17 @@
+DEFAULT_TARGET_CHANNEL_IDS = [
+    "UCqK_GSMbpiV8spgD3ZGloSw",
+    "UC_8j6_0S5S_Xv7Rz0u_yX1w",
+    "UCGy7SkBjcIAgTiwkXEtPnYg",
+    "UCCatR7nWbYrkVXdxXb4cGXw",
+    "UCUCY6fdZqmXbiUPscatfi0w",
+    "UCN9Nj4tjxVTLYWN0EKly_Q",
+    "UCl2oCaw8hdR_kbqyqd2klIA",
+    "UCmS89id7Y9X-O_Z7L89vH3A",
+    "UCevXpeL8cNyAnzw-NqJ4m2w",
+    "UC7ndli6X_Lz6vUvF-TscG6w",
+    "UCjemQfjaXAzA-95RKoy9n_g",
+    "UC_L6_vk5f7v-v3z_NfGZ76A",
+    "UCV6KDgJskWaEckne5aPA0aQ",
+    "UC9GnvZ6iR7vQ3TfD7H-86LA",
+    "UC59m_R9oR_yF77qHqFm6iSw",
+]

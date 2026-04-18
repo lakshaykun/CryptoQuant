@@ -7,6 +7,7 @@ YAML configuration lives here so runtime behavior can be changed without editing
 - `data.yaml` - symbols, interval, historical backfill start date, Delta table paths, and the upstream WebSocket URI.
 - `spark.yaml` - Spark application name, local master, Delta support, AQE, and performance settings.
 - `kafka.yaml` - broker aliases and topic settings for streaming ingestion.
+- `app.env` - legacy environment variable template for API keys and service endpoints.
 
 ## Usage pattern
 

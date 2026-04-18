@@ -8,3 +8,12 @@ topics:
   crypto_prices:
     partitions: 3
     replication_factor: 1
+  btc_reddit:
+    partitions: 3
+    replication_factor: 1
+  btc_yt:
+    partitions: 3
+    replication_factor: 1
+  btc_news:
+    partitions: 3
+    replication_factor: 1

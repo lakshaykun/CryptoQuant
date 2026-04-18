@@ -35,12 +35,20 @@ services:
     image: apache/kafka:3.7.0
     depends_on:
       - kafka
-    command: >
-      sh -c "sleep 15 &&
-             /opt/kafka/bin/kafka-topics.sh --create --if-not-exists
-             --topic crypto_prices
-             --bootstrap-server crypto-kafka:29092
-             --partitions 3 --replication-factor 1"
+    command:
+      - sh
+      - -c
+      - |
+        sleep 15
+        for topic in crypto_prices btc_reddit btc_yt btc_news; do
+          /opt/kafka/bin/kafka-topics.sh \
+            --create \
+            --if-not-exists \
+            --topic $$topic \
+            --bootstrap-server crypto-kafka:29092 \
+            --partitions 3 \
+            --replication-factor 1
+        done
 
   # =========================
   # 🔵 SPARK
@@ -122,6 +130,28 @@ services:
       - .:/opt/app
       - /var/run/docker.sock:/var/run/docker.sock
     command: scheduler
+
+  # =========================
+  # 🔴 MODEL SERVER
+  # =========================
+  model_server:
+    build:
+      dockerfile: docker/airflow/Dockerfile
+    container_name: model-server
+    working_dir: /opt/app
+    user: "0:0"
+    depends_on:
+      - spark
+      - kafka
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONPATH=/opt/app
+    volumes:
+      - .:/opt/app
+    command: >
+      sh -c "pip install --no-cache-dir fastapi uvicorn &&
+             python3 -m uvicorn api.app:app --host 0.0.0.0 --port 8000"
   
   # =========================
   # 🟢 MLFLOW

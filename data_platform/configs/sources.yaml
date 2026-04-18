@@ -1,0 +1,63 @@
+reddit:
+  subreddits:
+    - Bitcoin
+    - CryptoCurrency
+    - btc
+    - CryptoMarkets
+    - BitcoinMarkets
+    - solana
+    - ethstaker
+    - ethereum
+    - Altcoin
+    - WallStreetBetsCrypto
+    - Binance
+  keywords:  
+    - BTC
+    - Bitcoin
+    - BTCUSD
+    - breakout
+    - crash
+  engagement_weights:
+    score: 0.45
+    upvote_ratio: 0.35
+    comments: 0.20
+
+youtube:
+  channel_ids:
+  - UCRvqjQPSeaWn-uEx-w0XOIg
+  - UC1T-zhQn4h2drE6u3dvw4_A
+  - UCV6KDgJskWaEckne5aPA0aQ
+  - UCjemQfjaXAzA-95RKoy9n_g
+  - UCJgHxpqfhWEEjYH9cLXqhIQ
+  - UCXuqSBlHAE6Xw-yeJA0Tunw
+  max_comments_per_channel: 400
+  upload_playlists: []
+
+
+news:
+  feeds:
+    - https://bitcoinmagazine.com/.rss/full/
+    - https://news.bitcoin.com/feed/
+    - https://cointelegraph.com/rss/
+    - https://www.coindesk.com/arc/outboundfeeds/rss/
+    - https://decrypt.co/feed
+    - https://cryptoslate.com/feed/
+    - https://blockworks.co/feed
+  signal_keywords:
+    - btc
+    - bitcoin
+    - etf
+    - fed
+    - halving
+    - breakout
+    - crash
+    - inflation
+    - whale
+    - liquidation
+  max_entries_per_feed: 25
+  currency: BTC
+  interval_seconds: 120
+  engagement_weights:
+    comments: 0.45
+    keywords: 0.25
+    recency: 0.30

@@ -21,7 +21,7 @@ docker exec -it crypto-kafka /opt/kafka/bin/kafka-topics.sh \
 ### streaming pipeline run
 docker compose up
 
-ENV=host python3 -m pipelines.ingestion.streaming.jobs.crypto_stream_job
+ENV=host python3 -m pipelines.jobs.streaming.crypto_stream_job
 
 ENV=host python3 -m pipelines.ingestion.streaming.spark.spark_streaming
 

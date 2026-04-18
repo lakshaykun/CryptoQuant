@@ -4,6 +4,37 @@ app_name: CryptoQuant
 
 master: local[*]
 
+spark:
+  app_name: btc-sentiment-platform
+  master: local[*]
+
+streaming:
+  silver_trigger_seconds: 10
+  gold_trigger_seconds: 10
+
+gold:
+  window_seconds: 60
+  watermark_seconds: 180
+  cron_minutes: 1
+  sentiment_endpoint: http://127.0.0.1:8000/predict
+  sentiment_timeout_seconds: 10
+
+delta:
+  bronze: delta/bronze
+  silver: delta/silver
+  gold: delta/gold
+
+checkpoints:
+  bronze: delta/checkpoint/bronze
+  silver: delta/checkpoint/silver
+  gold: delta/checkpoint/gold
+
+kafka:
+  bootstrap_servers: localhost:9092
+  subscribe: btc_reddit,btc_yt,btc_news
+  starting_offsets: latest
+  fail_on_data_loss: false
+
 spark_configs:
   # Delta Lake
   spark.sql.extensions: io.delta.sql.DeltaSparkSessionExtension

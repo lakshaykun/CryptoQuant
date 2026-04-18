@@ -6,10 +6,11 @@ from kafka import KafkaProducer
 import json
 from utils.config_loader import load_config
 
+
 class CryptoProducer:
     def __init__(self, config_path="configs/kafka.yaml"):
         self.config = load_config(config_path)
-        
+
         env = os.getenv("ENV", "host")
         brokers = self.config["brokers"][env]
 
@@ -22,11 +23,12 @@ class CryptoProducer:
             batch_size=16384
         )
 
-    def send_price(self, data):
-        future = self.producer.send(self.config.get("crypto_topic", "crypto_prices"), data)
-
+    def send_message(self, topic: str, data: dict):
+        future = self.producer.send(topic, data)
         try:
-            record_metadata = future.get(timeout=10)
+            return future.get(timeout=10)
         except Exception as e:
-            # raise
             raise e
+
+    def send_price(self, data):
+        return self.send_message(self.config.get("crypto_topic", "crypto_prices"), data)

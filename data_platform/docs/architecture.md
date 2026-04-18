@@ -143,10 +143,13 @@ The tree below is truncated to the directories and files that define the current
 │   │   │           ├── binance_historical.py  # Binance ZIP source
 │   │   │           └── binance_today.py  # Binance daily source
 │   │   └── streaming/
-│   │       ├── jobs/
-│   │       │   └── crypto_stream_job.py  # stream producer job
 │   │       ├── producers/
 │   │       │   └── kafka_producer.py  # Kafka producer
+│   │       ├── sentiment/
+│   │       │   ├── news_stream_job.py  # news producer job
+│   │       │   ├── reddit_stream_job.py  # reddit producer job
+│   │       │   ├── run_all.py  # sentiment orchestrator
+│   │       │   └── youtube_stream_job.py  # youtube producer job
 │   │       ├── sources/
 │   │       │   ├── binance_source.py  # WebSocket source
 │   │       │   └── websocket_client.py  # WS reconnect client
@@ -162,6 +165,8 @@ The tree below is truncated to the directories and files that define the current
 │   │       ├── ingest.py  # ingest job
 │   │       ├── silver.py  # silver job
 │   │       └── utils.py  # batch helpers
+│   │   └── streaming/
+│   │       └── crypto_stream_job.py  # stream producer job
 │   ├── schema/
 │   │   ├── bronze/
 │   │   │   └── market.py  # bronze schema
