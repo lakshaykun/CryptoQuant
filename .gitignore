@@ -18,6 +18,8 @@ ENV/
 .env
 .env.*
 
+data_platform/config/app.env
+
 # =========================
 # Jupyter Notebook
 # =========================
