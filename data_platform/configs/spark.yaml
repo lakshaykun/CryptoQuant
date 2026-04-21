@@ -31,7 +31,7 @@ checkpoints:
 
 kafka:
   bootstrap_servers: localhost:9092
-  subscribe: btc_reddit,btc_yt,btc_news
+  subscribe: btc_reddit,btc_yt,btc_news,btc_telegram
   starting_offsets: latest
   fail_on_data_loss: false
 

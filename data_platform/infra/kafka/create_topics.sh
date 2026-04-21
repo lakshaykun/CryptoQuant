@@ -3,7 +3,7 @@ set -eu
 
 BOOTSTRAP_SERVER="${KAFKA_BOOTSTRAP_SERVERS:-crypto-kafka:29092}"
 
-for topic in crypto_prices btc_reddit btc_yt btc_news; do
+for topic in crypto_prices btc_reddit btc_yt btc_news btc_telegram; do
   /opt/kafka/bin/kafka-topics.sh --create --if-not-exists \
     --topic "$topic" \
     --bootstrap-server "$BOOTSTRAP_SERVER" \

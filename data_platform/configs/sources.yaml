@@ -143,6 +143,66 @@ youtube:
   lookback_hours: 6
 
 # ────────────────────────────────────────────────────────────
+# TELEGRAM
+# Per-symbol channels plus keyword filters so each symbol keeps
+# only relevant posts even when channels publish mixed-coin news.
+# Channel values can be @handle or plain handle.
+# ────────────────────────────────────────────────────────────
+telegram:
+  channels_by_symbol:
+    BTC:
+      - BitcoinMagazine
+      - cointelegraph
+      - coindesk
+    ETH:
+      - ethereum
+      - thedefiant
+      - cointelegraph
+    SOL:
+      - solana
+      - SolanaFloor
+      - cointelegraph
+    BNB:
+      - binance_announcements
+      - BNBchain
+      - cointelegraph
+    XRP:
+      - Ripple
+      - cointelegraph
+      - coindesk
+
+  keywords_by_symbol:
+    BTC:
+      - btc
+      - bitcoin
+      - sats
+      - lightning
+    ETH:
+      - eth
+      - ethereum
+      - ether
+      - layer2
+    SOL:
+      - sol
+      - solana
+      - spl
+      - validator
+    BNB:
+      - bnb
+      - binance
+      - bsc
+      - bnb chain
+    XRP:
+      - xrp
+      - ripple
+      - xrpl
+      - sec
+
+  max_messages_per_channel: 200
+  interval_seconds: 180
+  lookback_hours: 6
+
+# ────────────────────────────────────────────────────────────
 # NEWS
 # Per-symbol RSS feeds and signal keywords. General crypto
 # feeds (CoinTelegraph, CoinDesk, Decrypt) appear in every

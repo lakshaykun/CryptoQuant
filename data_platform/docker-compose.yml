@@ -40,7 +40,7 @@ services:
       - -c
       - |
         sleep 15
-        for topic in crypto_prices btc_reddit btc_yt btc_news; do
+        for topic in crypto_prices btc_reddit btc_yt btc_news btc_telegram; do
           /opt/kafka/bin/kafka-topics.sh \
             --create \
             --if-not-exists \

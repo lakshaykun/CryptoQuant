@@ -22,7 +22,7 @@ from utils.spark_utils import create_delta_spark_session
 BRONZE_DELTA_PATH = get_delta_path("bronze", "delta/bronze")
 BRONZE_CHECKPOINT_PATH = get_checkpoint_path("bronze", "checkpoints/bronze")
 KAFKA_BOOTSTRAP_SERVERS = get_kafka_option("bootstrap_servers", "localhost:9092")
-KAFKA_SUBSCRIBE_TOPICS = get_kafka_option("subscribe", "btc_reddit,btc_yt,btc_news")
+KAFKA_SUBSCRIBE_TOPICS = get_kafka_option("subscribe", "btc_reddit,btc_yt,btc_news,btc_telegram")
 KAFKA_STARTING_OFFSETS = get_kafka_option("starting_offsets", "latest")
 KAFKA_FAIL_ON_DATA_LOSS = get_kafka_option("fail_on_data_loss", "false")
 APP_NAME = f"{get_spark_app_name()}-bronze"

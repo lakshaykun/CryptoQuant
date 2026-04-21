@@ -6,6 +6,7 @@ from collections.abc import Callable
 
 from pipelines.ingestion.streaming.sentiment.news_stream_job import run_forever as run_news
 from pipelines.ingestion.streaming.sentiment.reddit_stream_job import run_forever as run_reddit
+from pipelines.ingestion.streaming.sentiment.telegram_stream_job import run_forever as run_telegram
 from pipelines.ingestion.streaming.sentiment.youtube_stream_job import run_forever as run_youtube
 from utils.logger import get_logger
 
@@ -42,11 +43,13 @@ def run_all(
     reddit_interval_seconds: int = 300,
     youtube_interval_seconds: int = 180,
     news_interval_seconds: int = 120,
+    telegram_interval_seconds: int = 180,
 ) -> None:
     processes = [
         _spawn("reddit-producer", run_reddit, reddit_interval_seconds),
         _spawn("youtube-producer", run_youtube, youtube_interval_seconds),
         _spawn("news-producer", run_news, news_interval_seconds),
+        _spawn("telegram-producer", run_telegram, telegram_interval_seconds),
     ]
 
     shutting_down = False
@@ -82,11 +85,12 @@ def run_all(
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Run reddit, youtube, and news sentiment producers together",
+        description="Run reddit, youtube, news, and telegram sentiment producers together",
     )
     parser.add_argument("--reddit-interval", type=int, default=300)
     parser.add_argument("--youtube-interval", type=int, default=180)
     parser.add_argument("--news-interval", type=int, default=120)
+    parser.add_argument("--telegram-interval", type=int, default=180)
     return parser.parse_args()
 
 
@@ -97,4 +101,5 @@ if __name__ == "__main__":
         reddit_interval_seconds=max(1, args.reddit_interval),
         youtube_interval_seconds=max(1, args.youtube_interval),
         news_interval_seconds=max(1, args.news_interval),
+        telegram_interval_seconds=max(1, args.telegram_interval),
     )

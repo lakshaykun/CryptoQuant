@@ -8,6 +8,7 @@ Operational entry points for local development live here.
 - `run_api.sh` - activates the local environment when available and starts the FastAPI app.
 - `export_gold_parquet_to_csv.py` - reads parquet data from the Gold layer and exports it as a single CSV file.
 - `export_bronze_silver_gold_parquet_to_csv.py` - exports parquet data from Bronze, Silver, and Gold layers into CSV files.
+- `generate_telegram_session.py` - interactive helper that logs in with Telethon and prints TELEGRAM_SESSION_STRING.
 
 ## Usage pattern
 
@@ -24,6 +25,12 @@ Export Bronze/Silver/Gold parquet to CSV:
 ```bash
 python scripts/export_bronze_silver_gold_parquet_to_csv.py
 python scripts/export_bronze_silver_gold_parquet_to_csv.py --layers bronze,silver,gold --output-dir delta
+```
+
+Generate Telegram session string:
+
+```bash
+python scripts/generate_telegram_session.py
 ```
 
 ## Future direction

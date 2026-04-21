@@ -21,6 +21,7 @@ KAFKA_TOPICS=(
   "btc_reddit"
   "btc_yt"
   "btc_news"
+  "btc_telegram"
 )
 
 STAGE_LABELS=(
@@ -31,6 +32,7 @@ STAGE_LABELS=(
   "reddit"
   "youtube"
   "news"
+  "telegram"
 )
 
 STAGE_MODULES=(
@@ -41,6 +43,7 @@ STAGE_MODULES=(
   "pipelines.ingestion.streaming.sentiment.reddit_stream_job"
   "pipelines.ingestion.streaming.sentiment.youtube_stream_job"
   "pipelines.ingestion.streaming.sentiment.news_stream_job"
+  "pipelines.ingestion.streaming.sentiment.telegram_stream_job"
 )
 
 SPARK_APP_NAMES=(
@@ -60,6 +63,7 @@ REQUIRED_FILES=(
   "${ROOT_DIR}/pipelines/ingestion/streaming/sentiment/reddit_stream_job.py"
   "${ROOT_DIR}/pipelines/ingestion/streaming/sentiment/youtube_stream_job.py"
   "${ROOT_DIR}/pipelines/ingestion/streaming/sentiment/news_stream_job.py"
+  "${ROOT_DIR}/pipelines/ingestion/streaming/sentiment/telegram_stream_job.py"
 )
 
 activate_venv_if_present() {
@@ -146,12 +150,14 @@ required_modules = [
     "bs4",
     "curl_cffi",
     "googleapiclient",
+    "telethon",
     "pipelines.jobs.streaming.bronze.kafka_to_delta",
     "pipelines.jobs.streaming.silver.clean_merge_stream",
     "pipelines.jobs.streaming.gold.sentiment_enrichment",
     "pipelines.ingestion.streaming.sentiment.reddit_stream_job",
     "pipelines.ingestion.streaming.sentiment.youtube_stream_job",
     "pipelines.ingestion.streaming.sentiment.news_stream_job",
+    "pipelines.ingestion.streaming.sentiment.telegram_stream_job",
 ]
 
 missing = []
@@ -178,6 +184,7 @@ ensure_runtime_dependencies() {
     "bs4"
     "curl_cffi"
     "googleapiclient"
+    "telethon"
   )
   local missing_modules=()
   local module
@@ -266,15 +273,17 @@ ensure_kafka_topics() {
 }
 
 run_bootstrap_ingestion_cycle() {
-  echo "Running one-shot ingestion bootstrap cycle (reddit/youtube/news)..."
+  echo "Running one-shot ingestion bootstrap cycle (reddit/youtube/news/telegram)..."
 
-  # Run all three producers in parallel and wait for all to complete.
+  # Run all four producers in parallel and wait for all to complete.
   local pids=()
   (cd "${ROOT_DIR}" && ENV=host PYTHONPATH="${ROOT_DIR}" python3 -m "pipelines.ingestion.streaming.sentiment.reddit_stream_job" --once) &
   pids+=($!)
   (cd "${ROOT_DIR}" && ENV=host PYTHONPATH="${ROOT_DIR}" python3 -m "pipelines.ingestion.streaming.sentiment.youtube_stream_job" --once) &
   pids+=($!)
   (cd "${ROOT_DIR}" && ENV=host PYTHONPATH="${ROOT_DIR}" python3 -m "pipelines.ingestion.streaming.sentiment.news_stream_job" --once) &
+  pids+=($!)
+  (cd "${ROOT_DIR}" && ENV=host PYTHONPATH="${ROOT_DIR}" python3 -m "pipelines.ingestion.streaming.sentiment.telegram_stream_job" --once) &
   pids+=($!)
 
   local failed=0
@@ -522,6 +531,7 @@ start_pipeline() {
   start_stage "${STAGE_LABELS[4]}" "${STAGE_MODULES[4]}"
   start_stage "${STAGE_LABELS[5]}" "${STAGE_MODULES[5]}"
   start_stage "${STAGE_LABELS[6]}" "${STAGE_MODULES[6]}"
+  start_stage "${STAGE_LABELS[7]}" "${STAGE_MODULES[7]}"
 
   echo "Sentiment pipeline is up."
   echo "Logs directory: ${LOG_DIR}"
@@ -584,7 +594,7 @@ usage() {
   cat <<'USAGE'
 Usage: run_pipeline.sh [start|stop|restart|status|check|clear-delta-logs]
 
-  start    Build image, start Kafka, then start cryptobert_api->bronze->silver->gold->reddit->youtube->news
+  start    Build image, start Kafka, then start cryptobert_api->bronze->silver->gold->reddit->youtube->news->telegram
   stop     Stop all sentiment pipeline stages and Kafka container
   restart  Stop and then start the full sentiment pipeline
   status   Show running status for each stage and Kafka

@@ -17,3 +17,6 @@ topics:
   btc_news:
     partitions: 3
     replication_factor: 1
+  btc_telegram:
+    partitions: 3
+    replication_factor: 1
