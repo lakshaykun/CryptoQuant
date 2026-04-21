@@ -5,6 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 PARENT_DIR="$(cd "${ROOT_DIR}/.." && pwd)"
 COMPOSE_FILE="${ROOT_DIR}/docker-compose.yml"
+SPARK_REQUIREMENTS_FILE="${ROOT_DIR}/docker/spark/requirements.txt"
 LOG_DIR="${ROOT_DIR}/logs/sentiment_pipeline"
 PID_DIR="${LOG_DIR}/pids"
 
@@ -167,6 +168,39 @@ if missing:
 PY
 }
 
+ensure_runtime_dependencies() {
+  local required_modules=(
+    "pyspark"
+    "delta"
+    "kafka"
+    "requests"
+    "feedparser"
+    "bs4"
+    "curl_cffi"
+    "googleapiclient"
+  )
+  local missing_modules=()
+  local module
+
+  for module in "${required_modules[@]}"; do
+    if ! python3 -c "import ${module}" >/dev/null 2>&1; then
+      missing_modules+=("${module}")
+    fi
+  done
+
+  if [[ ${#missing_modules[@]} -eq 0 ]]; then
+    return 0
+  fi
+
+  if [[ ! -f "${SPARK_REQUIREMENTS_FILE}" ]]; then
+    echo "Missing Python modules (${missing_modules[*]}) and requirements file not found: ${SPARK_REQUIREMENTS_FILE}" >&2
+    return 1
+  fi
+
+  echo "Installing runtime dependencies for sentiment pipeline: ${missing_modules[*]}"
+  python3 -m pip install -r "${SPARK_REQUIREMENTS_FILE}"
+}
+
 check_compose_config() {
   docker compose -f "${COMPOSE_FILE}" config >/dev/null
 }
@@ -229,6 +263,75 @@ ensure_kafka_topics() {
       return 1
     fi
   done
+}
+
+run_bootstrap_ingestion_cycle() {
+  echo "Running one-shot ingestion bootstrap cycle (reddit/youtube/news)..."
+
+  # Run all three producers in parallel and wait for all to complete.
+  local pids=()
+  (cd "${ROOT_DIR}" && ENV=host PYTHONPATH="${ROOT_DIR}" python3 -m "pipelines.ingestion.streaming.sentiment.reddit_stream_job" --once) &
+  pids+=($!)
+  (cd "${ROOT_DIR}" && ENV=host PYTHONPATH="${ROOT_DIR}" python3 -m "pipelines.ingestion.streaming.sentiment.youtube_stream_job" --once) &
+  pids+=($!)
+  (cd "${ROOT_DIR}" && ENV=host PYTHONPATH="${ROOT_DIR}" python3 -m "pipelines.ingestion.streaming.sentiment.news_stream_job" --once) &
+  pids+=($!)
+
+  local failed=0
+  for pid in "${pids[@]}"; do
+    if ! wait "${pid}"; then
+      echo "Warning: one bootstrap ingestion job (PID ${pid}) exited with a non-zero status." >&2
+      failed=1
+    fi
+  done
+
+  if [[ "${failed}" -eq 0 ]]; then
+    echo "Bootstrap ingestion cycle complete."
+  fi
+}
+
+wait_for_initial_data_cycle() {
+  local timeout_seconds=240
+  local waited=0
+  local delta_root="${ROOT_DIR}/delta"
+  local bronze_dir="${delta_root}/bronze"
+  local silver_dir="${delta_root}/silver"
+  local gold_dir="${delta_root}/gold"
+  local gold_realtime_csv="${delta_root}/gold_sentiment_realtime.csv"
+
+  while (( waited < timeout_seconds )); do
+    local bronze_ready=0
+    local silver_ready=0
+    local gold_ready=0
+    local csv_ready=0
+
+    if [[ -d "${bronze_dir}" ]] && find "${bronze_dir}" -type f -name "*.parquet" | grep -q .; then
+      bronze_ready=1
+    fi
+
+    if [[ -d "${silver_dir}" ]] && find "${silver_dir}" -type f -name "*.parquet" | grep -q .; then
+      silver_ready=1
+    fi
+
+    if [[ -d "${gold_dir}" ]] && find "${gold_dir}" -type f -name "*.parquet" | grep -q .; then
+      gold_ready=1
+    fi
+
+    if [[ -f "${gold_realtime_csv}" ]] && [[ "$(wc -l < "${gold_realtime_csv}" | tr -d ' ')" -gt 1 ]]; then
+      csv_ready=1
+    fi
+
+    if (( bronze_ready == 1 && silver_ready == 1 && gold_ready == 1 && csv_ready == 1 )); then
+      echo "Initial bootstrap cycle complete: bronze/silver/gold and realtime CSV are initialized."
+      return 0
+    fi
+
+    sleep 5
+    waited=$((waited + 5))
+  done
+
+  echo "Timed out waiting for initial bronze/silver/gold bootstrap cycle." >&2
+  return 1
 }
 
 start_stage() {
@@ -397,6 +500,7 @@ start_pipeline() {
   check_required_files
   check_python_syntax
   check_compose_config
+  ensure_runtime_dependencies
 
   echo "Building Docker image for sentiment pipeline dependencies..."
   docker compose -f "${COMPOSE_FILE}" build spark
@@ -411,6 +515,10 @@ start_pipeline() {
   start_stage "${STAGE_LABELS[1]}" "${STAGE_MODULES[1]}"
   start_stage "${STAGE_LABELS[2]}" "${STAGE_MODULES[2]}"
   start_stage "${STAGE_LABELS[3]}" "${STAGE_MODULES[3]}"
+
+  run_bootstrap_ingestion_cycle
+  wait_for_initial_data_cycle
+
   start_stage "${STAGE_LABELS[4]}" "${STAGE_MODULES[4]}"
   start_stage "${STAGE_LABELS[5]}" "${STAGE_MODULES[5]}"
   start_stage "${STAGE_LABELS[6]}" "${STAGE_MODULES[6]}"
@@ -435,6 +543,7 @@ stop_pipeline() {
 
 clear_delta_logs() {
   local delta_root="${ROOT_DIR}/delta"
+  local gold_realtime_csv="${delta_root}/gold_sentiment_realtime.csv"
 
   if [[ ! -d "${delta_root}" ]]; then
     echo "Delta directory not found: ${delta_root}"
@@ -455,9 +564,12 @@ clear_delta_logs() {
     fi
   done
 
-  if [[ -d "${delta_root}/checkpoint" ]]; then
-    echo "Removing streaming checkpoints..."
-    rm -rf "${delta_root}/checkpoint"
+  echo "Removing all streaming checkpoint directories..."
+  find "${delta_root}" -type d \( -name "checkpoint" -o -name "checkpoints" -o -name "checkpoint_*" -o -name "checkpoints_*" \) -prune -exec rm -rf {} +
+
+  if [[ -f "${gold_realtime_csv}" ]]; then
+    echo "Removing realtime gold CSV: ${gold_realtime_csv}"
+    rm -f "${gold_realtime_csv}"
   fi
 
   mkdir -p "${delta_root}/checkpoint"

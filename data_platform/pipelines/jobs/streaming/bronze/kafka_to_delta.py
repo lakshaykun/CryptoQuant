@@ -26,7 +26,7 @@ KAFKA_SUBSCRIBE_TOPICS = get_kafka_option("subscribe", "btc_reddit,btc_yt,btc_ne
 KAFKA_STARTING_OFFSETS = get_kafka_option("starting_offsets", "latest")
 KAFKA_FAIL_ON_DATA_LOSS = get_kafka_option("fail_on_data_loss", "false")
 APP_NAME = f"{get_spark_app_name()}-bronze"
-BRONZE_LOOKBACK_HOURS = 24
+BRONZE_LOOKBACK_HOURS = 6
 
 
 def build_kafka_stream() -> DataFrame:

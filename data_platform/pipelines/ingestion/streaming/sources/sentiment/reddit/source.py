@@ -1,3 +1,4 @@
+import logging
 import time
 
 import requests
@@ -5,11 +6,48 @@ import requests
 from pipelines.ingestion.streaming.sources.sentiment.shared.normalization import (
     normalize_event,
 )
+from pipelines.ingestion.streaming.sources.sentiment.shared.ingestion_state import apply_ingestion_policies
 from utils.number_utils import percent, to_float, to_int
-from utils.source_config import get_list_value, get_sources_section
+from utils.source_config import get_list_value, get_sources_section, load_sources_config
 
-HEADERS = {"User-Agent": "btc-sentiment-ingestion/1.0"}
+HEADERS = {"User-Agent": "crypto-sentiment-ingestion/1.0"}
 
+logger = logging.getLogger(__name__)
+
+# ─── Symbols ────────────────────────────────────────────────────────────────
+
+def _configured_symbols() -> list[str]:
+    """Return the list of crypto symbols to track (e.g. BTC, ETH, SOL, BNB, XRP)."""
+    cfg = load_sources_config()
+    raw = cfg.get("symbols", ["BTC"])
+    if isinstance(raw, list):
+        return [str(s).strip().upper() for s in raw if str(s).strip()]
+    return ["BTC"]
+
+
+# ─── Per-symbol subreddits and keywords ─────────────────────────────────────
+
+def _subreddits_for_symbol(section: dict, symbol: str) -> list[str]:
+    """Return subreddits dedicated to *symbol* from sources.yaml."""
+    by_sym = section.get("subreddits_by_symbol", {})
+    raw = by_sym.get(symbol, [])
+    if isinstance(raw, list):
+        return [str(s).strip() for s in raw if str(s).strip()]
+    # Fallback: legacy flat list if the new key is absent
+    return get_list_value(section, "subreddits", [])
+
+
+def _keywords_for_symbol(section: dict, symbol: str) -> list[str]:
+    """Return search keywords dedicated to *symbol* from sources.yaml."""
+    by_sym = section.get("keywords_by_symbol", {})
+    raw = by_sym.get(symbol, [])
+    if isinstance(raw, list):
+        return [str(k).strip() for k in raw if str(k).strip()]
+    # Fallback: legacy flat list
+    return get_list_value(section, "keywords", [])
+
+
+# ─── Engagement scoring ──────────────────────────────────────────────────────
 
 def _reddit_engagement_weights(section: dict) -> dict[str, float]:
     raw = section.get("engagement_weights")
@@ -30,7 +68,12 @@ def _reddit_engagement_weights(section: dict) -> dict[str, float]:
     return {key: value / total for key, value in parsed.items()}
 
 
-def _engagement_score(post: dict, total_score: int, total_comments: int, weights: dict[str, float]) -> int:
+def _engagement_score(
+    post: dict,
+    total_score: int,
+    total_comments: int,
+    weights: dict[str, float],
+) -> int:
     score_pct = percent(to_int(post.get("score", 0)), total_score)
     comments_pct = percent(to_int(post.get("num_comments", 0)), total_comments)
     upvote_pct = max(0.0, min(to_float(post.get("upvote_ratio", 0.0)) * 100.0, 100.0))
@@ -43,15 +86,20 @@ def _engagement_score(post: dict, total_score: int, total_comments: int, weights
     return max(0, int(round(engagement)))
 
 
-def fetch_reddit_events() -> list[dict]:
-    section = get_sources_section("reddit")
-    subreddits = get_list_value(section, "subreddits", [])
-    keywords = get_list_value(section, "keywords", [])
+# ─── Per-symbol fetch ────────────────────────────────────────────────────────
+
+def _fetch_events_for_symbol(
+    symbol: str,
+    section: dict,
+    weights: dict[str, float],
+) -> list[dict]:
+    """Fetch Reddit posts for a single *symbol* from its dedicated subreddits."""
+    subreddits = _subreddits_for_symbol(section, symbol)
+    keywords = _keywords_for_symbol(section, symbol)
 
     if not subreddits or not keywords:
+        logger.warning("No subreddits/keywords configured for symbol=%s — skipping.", symbol)
         return []
-
-    weights = _reddit_engagement_weights(section)
 
     events: list[dict] = []
 
@@ -84,15 +132,39 @@ def fetch_reddit_events() -> list[dict]:
                         "source": "reddit",
                         "text": f"{post.get('title', '')} {post.get('selftext', '')}",
                         "engagement": _engagement_score(post, total_score, total_comments, weights),
-                        "symbol": "BTC",
+                        "symbol": symbol,
                     }
                     try:
                         events.append(normalize_event(payload))
                     except ValueError:
                         continue
 
-                time.sleep(1)
-            except Exception:
+                time.sleep(0.5)  # polite rate limit between subreddit/keyword combos
+            except Exception as exc:
+                logger.debug("Reddit fetch failed [symbol=%s sub=%s kw=%s]: %s", symbol, sub, keyword, exc)
                 continue
 
     return events
+
+
+# ─── Public entry-point ──────────────────────────────────────────────────────
+
+def fetch_reddit_events() -> list[dict]:
+    """Fetch Reddit posts for ALL configured symbols and return a combined event list.
+
+    Each event carries a ``symbol`` field (e.g. ``'BTC'``, ``'ETH'``) so that
+    downstream bronze → silver → gold stages can group sentiment per coin.
+    """
+    section = get_sources_section("reddit")
+    lookback_hours = section.get("lookback_hours", 6)
+    weights = _reddit_engagement_weights(section)
+    symbols = _configured_symbols()
+
+    all_events: list[dict] = []
+    for symbol in symbols:
+        logger.info("Fetching Reddit events for symbol=%s", symbol)
+        symbol_events = _fetch_events_for_symbol(symbol, section, weights)
+        logger.info("  -> fetched %d raw events for %s", len(symbol_events), symbol)
+        all_events.extend(symbol_events)
+
+    return apply_ingestion_policies(all_events, lookback_hours=lookback_hours)

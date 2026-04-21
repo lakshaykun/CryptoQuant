@@ -37,3 +37,10 @@ This package contains the data movement and transformation layer for CryptoQuant
 	- `pipelines/ingestion/streaming/sources/sentiment/reddit/` - Reddit config and fetch logic.
 	- `pipelines/ingestion/streaming/sources/sentiment/youtube/` - YouTube config and fetch logic.
 	- `pipelines/ingestion/streaming/sources/sentiment/news/` - RSS and CryptoPanic fetch logic.
+
+## Ingestion Metrics
+
+- Show per-minute ingested rows for Bronze, Silver, and Gold Delta tables (default last 60 minutes):
+	- `python -m pipelines.scripts.per_minute_ingested_data`
+- Customize lookback window (for example, last 180 minutes):
+	- `python -m pipelines.scripts.per_minute_ingested_data --minutes 180`

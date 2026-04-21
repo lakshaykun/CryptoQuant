@@ -4,10 +4,15 @@ from typing import Any
 
 import yaml
 
+# Resolve the project root (data_platform/) relative to this file's location so
+# that configs/sources.yaml is always found regardless of the working directory.
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+_DEFAULT_SOURCES_CONFIG = _PROJECT_ROOT / "configs" / "sources.yaml"
+
 
 @lru_cache(maxsize=1)
-def load_sources_config(path: str | Path = "configs/sources.yaml") -> dict[str, Any]:
-	config_path = Path(path)
+def load_sources_config(path: str | Path | None = None) -> dict[str, Any]:
+	config_path = Path(path) if path is not None else _DEFAULT_SOURCES_CONFIG
 	if not config_path.exists():
 		return {}
 

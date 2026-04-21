@@ -61,6 +61,7 @@ class SilverSentimentTransformer:
             .withColumn(
                 "event_time",
                 F.coalesce(
+                    F.col("kafka_timestamp"),
                     F.to_timestamp(F.col("timestamp")),
                     F.to_timestamp(F.from_unixtime(F.col("timestamp").cast("double"))),
                     F.to_timestamp(F.from_unixtime((F.col("timestamp").cast("double") / 1000.0))),

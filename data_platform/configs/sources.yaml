@@ -1,63 +1,239 @@
+# ============================================================
+#  sources.yaml — Multi-Crypto Sentiment Source Configuration
+#  Symbols tracked: BTC, ETH, SOL, BNB, XRP
+# ============================================================
+
+# The 5 symbols the sentiment pipeline will track.
+symbols:
+  - BTC
+  - ETH
+  - SOL
+  - BNB
+  - XRP
+
+# ────────────────────────────────────────────────────────────
+# REDDIT
+# Each symbol gets its own dedicated set of subreddits and
+# keywords so posts are correctly tagged per coin.
+# ────────────────────────────────────────────────────────────
 reddit:
-  subreddits:
-    - Bitcoin
-    - CryptoCurrency
-    - btc
-    - CryptoMarkets
-    - BitcoinMarkets
-    - solana
-    - ethstaker
-    - ethereum
-    - Altcoin
-    - WallStreetBetsCrypto
-    - Binance
-  keywords:  
-    - BTC
-    - Bitcoin
-    - BTCUSD
-    - breakout
-    - crash
+  subreddits_by_symbol:
+    BTC:
+      - Bitcoin
+      - btc
+      - BitcoinMarkets
+      - WallStreetBetsCrypto
+      - CryptoCurrency
+    ETH:
+      - ethereum
+      - ethstaker
+      - ethfinance
+      - CryptoCurrency
+      - defi
+    SOL:
+      - solana
+      - SolanaNFT
+      - CryptoCurrency
+      - CryptoMarkets
+      - Defi_Solana
+    BNB:
+      - binance
+      - BNBChain
+      - CryptoCurrency
+      - CryptoMarkets
+      - BinanceSmartChain
+    XRP:
+      - Ripple
+      - XRP
+      - CryptoCurrency
+      - CryptoMarkets
+      - XRPTrader
+
+  keywords_by_symbol:
+    BTC:
+      - BTC
+      - Bitcoin
+      - BTCUSD
+      - "bitcoin halving"
+      - "bitcoin etf"
+    ETH:
+      - ETH
+      - Ethereum
+      - ETHUSD
+      - "ethereum merge"
+      - "eth staking"
+    SOL:
+      - SOL
+      - Solana
+      - SOLUSD
+      - "solana network"
+      - "solana nft"
+    BNB:
+      - BNB
+      - Binance
+      - BNBUSD
+      - "bnb chain"
+      - "binance smart chain"
+    XRP:
+      - XRP
+      - Ripple
+      - XRPUSD
+      - "xrp sec"
+      - "cross border payment"
+
   engagement_weights:
     score: 0.45
     upvote_ratio: 0.35
     comments: 0.20
 
+  lookback_hours: 6
+
+# ────────────────────────────────────────────────────────────
+# YOUTUBE
+# Per-symbol curated channels covering each crypto asset, plus
+# a coin-specific search term used when querying comment threads.
+# ────────────────────────────────────────────────────────────
 youtube:
-  channel_ids:
-  - UCRvqjQPSeaWn-uEx-w0XOIg
-  - UC1T-zhQn4h2drE6u3dvw4_A
-  - UCV6KDgJskWaEckne5aPA0aQ
-  - UCjemQfjaXAzA-95RKoy9n_g
-  - UCJgHxpqfhWEEjYH9cLXqhIQ
-  - UCXuqSBlHAE6Xw-yeJA0Tunw
-  max_comments_per_channel: 400
-  upload_playlists: []
+  channels_by_symbol:
+    # BTC — Bitcoin-focused analysts and news channels
+    BTC:
+      - UCRvqjQPSeaWn-uEx-w0XOIg   # Coin Bureau
+      - UC1T-zhQn4h2drE6u3dvw4_A   # BitBoy Crypto
+      - UCV6KDgJskWaEckne5aPA0aQ   # Benjamin Cowen
+      - UCXuqSBlHAE6Xw-yeJA0Tunw   # Lark Davis
+      - UCHop-jpf-huVT1IYw7cxoaA   # Andreas Antonopoulos
+    # ETH — Ethereum and DeFi focused channels
+    ETH:
+      - UCjemQfjaXAzA-95RKoy9n_g   # EllioTrades
+      - UCJgHxpqfhWEEjYH9cLXqhIQ   # Bankless
+      - UCXuqSBlHAE6Xw-yeJA0Tunw   # Lark Davis
+      - UC7ndli6X_Lz6vUvF-TscG6w   # Finematics
+      - UC-5HLi3buMzdxjdTdic3se9A   # The Defiant
+    # SOL — Solana ecosystem channels
+    SOL:
+      - UCRvqjQPSeaWn-uEx-w0XOIg   # Coin Bureau
+      - UC1T-zhQn4h2drE6u3dvw4_A   # BitBoy Crypto
+      - UCjemQfjaXAzA-95RKoy9n_g   # EllioTrades
+      - UCN9Nj4tjxVTLYWN0EKly_Q    # Altcoin Daily
+      - UCqK_GSMbpiV8spgD3ZGloSw   # Crypto Banter
+    # BNB — Binance and BNB Chain channels
+    BNB:
+      - UCRvqjQPSeaWn-uEx-w0XOIg   # Coin Bureau
+      - UCV6KDgJskWaEckne5aPA0aQ   # Benjamin Cowen
+      - UCXuqSBlHAE6Xw-yeJA0Tunw   # Lark Davis
+      - UCN9Nj4tjxVTLYWN0EKly_Q    # Altcoin Daily
+      - UC1T-zhQn4h2drE6u3dvw4_A   # BitBoy Crypto
+    # XRP — Ripple and XRP-focused channels
+    XRP:
+      - UCRvqjQPSeaWn-uEx-w0XOIg   # Coin Bureau
+      - UCjemQfjaXAzA-95RKoy9n_g   # EllioTrades
+      - UCN9Nj4tjxVTLYWN0EKly_Q    # Altcoin Daily
+      - UCqK_GSMbpiV8spgD3ZGloSw   # Crypto Banter
+      - UC1T-zhQn4h2drE6u3dvw4_A   # BitBoy Crypto
 
+  # YouTube comment search terms per symbol (used in commentThreads API)
+  search_terms_by_symbol:
+    BTC: "bitcoin BTC"
+    ETH: "ethereum ETH"
+    SOL: "solana SOL"
+    BNB: "binance BNB"
+    XRP: "ripple XRP"
 
+  max_comments_per_channel: 200
+  lookback_hours: 6
+
+# ────────────────────────────────────────────────────────────
+# NEWS
+# Per-symbol RSS feeds and signal keywords. General crypto
+# feeds (CoinTelegraph, CoinDesk, Decrypt) appear in every
+# symbol so breaking news is always captured; coin-specific
+# feeds add focused coverage.
+# ────────────────────────────────────────────────────────────
 news:
-  feeds:
-    - https://bitcoinmagazine.com/.rss/full/
-    - https://news.bitcoin.com/feed/
-    - https://cointelegraph.com/rss/
-    - https://www.coindesk.com/arc/outboundfeeds/rss/
-    - https://decrypt.co/feed
-    - https://cryptoslate.com/feed/
-    - https://blockworks.co/feed
-  signal_keywords:
-    - btc
-    - bitcoin
-    - etf
-    - fed
-    - halving
-    - breakout
-    - crash
-    - inflation
-    - whale
-    - liquidation
+  feeds_by_symbol:
+    BTC:
+      - https://bitcoinmagazine.com/.rss/full/
+      - https://news.bitcoin.com/feed/
+      - https://cointelegraph.com/rss/
+      - https://www.coindesk.com/arc/outboundfeeds/rss/
+      - https://decrypt.co/feed
+      - https://cryptoslate.com/feed/
+      - https://blockworks.co/feed
+    ETH:
+      - https://cointelegraph.com/rss/
+      - https://www.coindesk.com/arc/outboundfeeds/rss/
+      - https://decrypt.co/feed
+      - https://thedefiant.io/feed
+      - https://cryptoslate.com/feed/
+      - https://blockworks.co/feed
+      - https://www.theblock.co/rss.xml
+    SOL:
+      - https://cointelegraph.com/rss/
+      - https://www.coindesk.com/arc/outboundfeeds/rss/
+      - https://decrypt.co/feed
+      - https://cryptoslate.com/feed/
+      - https://blockworks.co/feed
+      - https://solanafloor.com/feed
+    BNB:
+      - https://cointelegraph.com/rss/
+      - https://www.coindesk.com/arc/outboundfeeds/rss/
+      - https://decrypt.co/feed
+      - https://cryptoslate.com/feed/
+      - https://blockworks.co/feed
+      - https://www.theblock.co/rss.xml
+    XRP:
+      - https://cointelegraph.com/rss/
+      - https://www.coindesk.com/arc/outboundfeeds/rss/
+      - https://decrypt.co/feed
+      - https://cryptoslate.com/feed/
+      - https://blockworks.co/feed
+      - https://xrpl.org/blog/feed.xml
+
+  signal_keywords_by_symbol:
+    BTC:
+      - btc
+      - bitcoin
+      - halving
+      - etf
+      - whale
+      - liquidation
+      - breakout
+      - crash
+    ETH:
+      - eth
+      - ethereum
+      - defi
+      - staking
+      - gas
+      - merge
+      - layer2
+      - rollup
+    SOL:
+      - sol
+      - solana
+      - nft
+      - "solana network"
+      - validator
+      - "proof of history"
+    BNB:
+      - bnb
+      - binance
+      - "bnb chain"
+      - launchpad
+      - "bsc"
+      - "binance smart chain"
+    XRP:
+      - xrp
+      - ripple
+      - sec
+      - "cross-border"
+      - "xrpl"
+      - cbdc
+
   max_entries_per_feed: 25
-  currency: BTC
   interval_seconds: 120
   engagement_weights:
     comments: 0.45
     keywords: 0.25
     recency: 0.30
+  lookback_hours: 6

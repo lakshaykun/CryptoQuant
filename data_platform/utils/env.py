@@ -19,21 +19,43 @@ def _parse_env_line(line: str) -> tuple[str, str] | None:
 	return key, value
 
 
-def load_env_file(file_path: str | Path = "configs/app.env") -> dict[str, str]:
-	path = Path(file_path)
+def _candidate_env_paths(file_path: str | Path | None = None) -> list[Path]:
+	if file_path is not None:
+		return [Path(file_path)]
+
+	this_file = Path(__file__).resolve()
+	data_platform_root = this_file.parents[1]
+	workspace_root = this_file.parents[2]
+	cwd = Path.cwd()
+
+	# Search most likely locations first while keeping legacy support.
+	return [
+		workspace_root / ".env",
+		data_platform_root / ".env",
+		cwd / ".env",
+		data_platform_root / "configs" / "app.env",
+	]
+
+
+def load_env_file(file_path: str | Path | None = None) -> dict[str, str]:
+	paths = _candidate_env_paths(file_path)
 	loaded: dict[str, str] = {}
 
-	if not path.exists():
-		return loaded
-
-	for line in path.read_text(encoding="utf-8").splitlines():
-		parsed = _parse_env_line(line)
-		if not parsed:
+	for path in paths:
+		if not path.exists():
 			continue
 
-		key, value = parsed
-		os.environ.setdefault(key, value)
-		loaded[key] = value
+		for line in path.read_text(encoding="utf-8").splitlines():
+			parsed = _parse_env_line(line)
+			if not parsed:
+				continue
+
+			key, value = parsed
+			os.environ.setdefault(key, value)
+			loaded[key] = value
+
+		# Stop after first existing env file to avoid accidental overrides.
+		break
 
 	return loaded
 

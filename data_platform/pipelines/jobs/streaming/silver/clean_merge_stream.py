@@ -7,8 +7,10 @@ from collections.abc import Iterator
 
 from delta.tables import DeltaTable
 from pyspark.sql import DataFrame, SparkSession
+from pyspark.sql import functions as F
 from pyspark.sql.functions import col, from_json
 from pyspark.sql.streaming import StreamingQuery
+from pyspark.sql.window import Window
 from pyspark.sql.types import (
     DoubleType,
     IntegerType,
@@ -96,8 +98,58 @@ def build_parsed_stream():
         spark.readStream
         .format("delta")
         .load(BRONZE_DELTA_PATH)
-        .select(from_json(col("raw_json"), scored_schema).alias("data"))
-        .select("data.*")
+        .select(
+            from_json(col("raw_json"), scored_schema).alias("data"),
+            col("kafka_timestamp"),
+        )
+        .select("data.*", "kafka_timestamp")
+    )
+
+
+def _apply_duplicate_engagement_delta(batch_df: DataFrame) -> DataFrame:
+    if batch_df is None or not batch_df.take(1):
+        return batch_df
+
+    if not DeltaTable.isDeltaTable(batch_df.sparkSession, SILVER_DELTA_PATH):
+        return batch_df
+
+    current_ids = batch_df.select("id").where(F.col("id").isNotNull()).dropDuplicates()
+    if not current_ids.take(1):
+        return batch_df
+
+    silver_history = batch_df.sparkSession.read.format("delta").load(SILVER_DELTA_PATH)
+    if "id" not in silver_history.columns or "engagement" not in silver_history.columns:
+        return batch_df
+
+    order_cols = [F.col("event_time").desc_nulls_last()] if "event_time" in silver_history.columns else []
+    if "timestamp" in silver_history.columns:
+        order_cols.append(F.col("timestamp").desc_nulls_last())
+    order_cols.append(F.col("engagement").cast("long").desc_nulls_last())
+
+    latest_per_id = (
+        silver_history
+        .select("id", "engagement", *(["event_time"] if "event_time" in silver_history.columns else []), *(["timestamp"] if "timestamp" in silver_history.columns else []))
+        .where(F.col("id").isNotNull())
+        .join(current_ids, on="id", how="inner")
+        .withColumn("_rn", F.row_number().over(Window.partitionBy("id").orderBy(*order_cols)))
+        .where(F.col("_rn") == 1)
+        .select(
+            F.col("id"),
+            F.col("engagement").cast("long").alias("_prev_engagement"),
+        )
+    )
+
+    return (
+        batch_df
+        .join(latest_per_id, on="id", how="left")
+        .withColumn("_current_engagement", F.coalesce(F.col("engagement").cast("long"), F.lit(0)))
+        .withColumn(
+            "engagement",
+            F.when(F.col("_prev_engagement").isNull(), F.col("_current_engagement"))
+            .otherwise(F.col("_current_engagement") - F.col("_prev_engagement"))
+            .cast("int"),
+        )
+        .drop("_prev_engagement", "_current_engagement")
     )
 
 
@@ -158,7 +210,8 @@ def process_silver_batch(batch_df: DataFrame, batch_id: int) -> None:
     if not batch_df.take(1):
         return
 
-    scored_batch = build_scored_stream(batch_df)
+    adjusted_batch = _apply_duplicate_engagement_delta(batch_df)
+    scored_batch = build_scored_stream(adjusted_batch)
     if not scored_batch.take(1):
         return
 

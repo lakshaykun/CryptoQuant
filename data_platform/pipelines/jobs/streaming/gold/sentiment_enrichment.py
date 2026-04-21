@@ -35,7 +35,7 @@ SILVER_DELTA_PATH = get_delta_path("silver", "delta/silver")
 GOLD_DELTA_PATH = get_delta_path("gold", "delta/gold")
 # Use a dedicated checkpoint namespace for the realtime gold+csv sink.
 GOLD_CHECKPOINT_PATH = f"{get_checkpoint_path('gold', 'checkpoints/gold')}_realtime_csv_v1"
-GOLD_WINDOW_SECONDS = get_gold_window_seconds(300)
+GOLD_WINDOW_SECONDS = get_gold_window_seconds(60)
 GOLD_WINDOW_DURATION = f"{GOLD_WINDOW_SECONDS} seconds"
 GOLD_WATERMARK_SECONDS = get_gold_watermark_seconds(600)
 GOLD_WATERMARK_DURATION = f"{GOLD_WATERMARK_SECONDS} seconds"
@@ -235,52 +235,48 @@ def _build_realtime_csv_rows(
         actual_by_minute = actual_rows_by_symbol.get(symbol, {})
         latest_actual_minute = max(actual_by_minute.keys()) if actual_by_minute else None
 
-        if state.last_minute is None and latest_actual_minute is None:
+        # Emit at most one row per symbol per wall-clock minute.
+        # This avoids large catch-up backfills when the stream is idle.
+        if state.last_minute is not None and state.last_minute >= now_minute:
             continue
 
-        start_minute = latest_actual_minute if state.last_minute is None else (state.last_minute + timedelta(minutes=1))
-        if start_minute is None:
-            continue
+        minute_time = now_minute
+        observed = actual_by_minute.get(minute_time)
 
-        end_minute = now_minute
-        if latest_actual_minute is not None and latest_actual_minute > end_minute:
-            end_minute = latest_actual_minute
-
-        if start_minute > end_minute:
-            continue
-
-        for minute_time in _minute_range(start_minute, end_minute):
+        if observed is None and state.last_minute is None and latest_actual_minute is not None:
+            minute_time = latest_actual_minute
             observed = actual_by_minute.get(minute_time)
-            if observed is not None:
-                sentiment_index = _to_float(observed["sentiment_index"], 0.0)
-                total_engagement = _to_float(observed["total_engagement"], 0.0)
-                avg_confidence = _to_float(observed["avg_confidence"], state.last_avg_confidence)
-                message_count = _to_int(observed["message_count"], 0)
-                is_observed = True
-            else:
-                if not state.sentiment_history:
-                    continue
-                sentiment_index = _ema_from_recent(list(state.sentiment_history), EMA_LOOKBACK)
-                total_engagement = 0.0
-                avg_confidence = state.last_avg_confidence
-                message_count = 0
-                is_observed = False
 
-            rows_to_write.append(
-                {
-                    "minute_time": minute_time.isoformat(),
-                    "symbol": symbol,
-                    "sentiment_index": f"{sentiment_index:.6f}",
-                    "total_engagement": f"{total_engagement:.6f}",
-                    "avg_confidence": f"{avg_confidence:.6f}",
-                    "message_count": str(message_count),
-                    "is_observed": "true" if is_observed else "false",
-                }
-            )
+        if observed is not None:
+            sentiment_index = _to_float(observed["sentiment_index"], 0.0)
+            total_engagement = _to_float(observed["total_engagement"], 0.0)
+            avg_confidence = _to_float(observed["avg_confidence"], state.last_avg_confidence)
+            message_count = _to_int(observed["message_count"], 0)
+            is_observed = True
+        else:
+            if not state.sentiment_history:
+                continue
+            sentiment_index = _ema_from_recent(list(state.sentiment_history), EMA_LOOKBACK)
+            total_engagement = 0.0
+            avg_confidence = state.last_avg_confidence
+            message_count = 0
+            is_observed = False
 
-            state.sentiment_history.append(sentiment_index)
-            state.last_avg_confidence = avg_confidence
-            state.last_minute = minute_time
+        rows_to_write.append(
+            {
+                "minute_time": minute_time.isoformat(),
+                "symbol": symbol,
+                "sentiment_index": f"{sentiment_index:.6f}",
+                "total_engagement": f"{total_engagement:.6f}",
+                "avg_confidence": f"{avg_confidence:.6f}",
+                "message_count": str(message_count),
+                "is_observed": "true" if is_observed else "false",
+            }
+        )
+
+        state.sentiment_history.append(sentiment_index)
+        state.last_avg_confidence = avg_confidence
+        state.last_minute = minute_time
 
     return rows_to_write
 
