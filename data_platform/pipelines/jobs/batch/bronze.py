@@ -7,8 +7,8 @@ from pipelines.schema.raw.market import RAW_MARKET_SCHEMA
 from pipelines.storage.delta.writer import write_batch
 from pipelines.transformers.bronze.market import BronzeMarketTransformer
 from pipelines.schema.bronze.market import BRONZE_MARKET_SCHEMA
-from utils.logger import get_logger
-from utils.config_loader import load_config
+from utils_global.logger import get_logger
+from utils_global.config_loader import load_config
 from pipelines.storage.local.csv import read_csv
 
 
@@ -37,6 +37,10 @@ def main():
         # Transform → Bronze
         # -----------------------------
         df = BronzeMarketTransformer.transform(df, "batch")
+
+        if df is None or df.rdd.isEmpty():
+            logger.warning("No data after transformation, skipping write")
+            return
 
         logger.info(f"Bronze count: {df.count()}")
 

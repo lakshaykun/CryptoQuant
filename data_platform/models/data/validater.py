@@ -1,8 +1,8 @@
 # models/data/schema.py
 
 import pandas as pd
-from utils.logger import get_logger
-from utils.config_loader import load_config
+from utils_global.logger import get_logger
+from utils_global.config_loader import load_config
 
 logger = get_logger(__name__)
 config = load_config("configs/model.yaml")

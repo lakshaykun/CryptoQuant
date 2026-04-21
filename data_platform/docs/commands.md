@@ -32,25 +32,20 @@ docker exec -it crypto-kafka /opt/kafka/bin/kafka-console-consumer.sh \
   --bootstrap-server localhost:9092
 
 
-### Starting airflow
-mkdir -p logs
-sudo chown -R 50000:0 logs
-
+### Starting data_platform
+```
 clear
-docker compose down -v
+docker compose down
 docker compose build
 docker compose up --build -d
 docker ps -a
-
-docker ps
-  airflow-webserver
-  airflow-scheduler
-  spark-master
-  spark-worker
-  crypto-kafka
+```
 
 http://localhost:8080 - airflow / airflow
 
+
+### clear data in delta
+sudo rm -rf delta/bronze/market delta/silver/market delta/raw_data/market delta/state/market delta/gold/market
 
 ### To reset permissions if needed
 sudo chown -R $USER:$USER .

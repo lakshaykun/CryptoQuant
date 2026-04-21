@@ -1,7 +1,8 @@
 import numpy as np
+import pandas as pd
 
-def backtest(df):
-    df = df.copy()
+def backtest(X_test, y_test, preds):
+    df = pd.DataFrame({"log_return": y_test, "prediction": preds})
 
     # Signal: long if positive prediction
     df["signal"] = np.where(df["prediction"] > 0, 1, -1)

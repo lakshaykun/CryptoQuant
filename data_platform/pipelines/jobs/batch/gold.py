@@ -6,7 +6,7 @@ from pipelines.storage.delta.reader import read_incremental_symbols, read_table,
 from pipelines.transformers.gold.market import GoldMarketTransformer
 from pipelines.storage.delta.writer import write_batch
 from pipelines.schema.gold.market import GOLD_MARKET_SCHEMA
-from utils.logger import get_logger
+from utils_global.logger import get_logger
 
 
 def main():
@@ -23,7 +23,7 @@ def main():
 
         last_open_times_symbols = {
             row["symbol"]: max(
-                row["last_processed_time"] - timedelta(minutes=30),
+                (row["last_processed_time"] - timedelta(minutes=30)),
                 datetime(1970, 1, 1)
             )
             for row in state_df.collect()
@@ -36,6 +36,10 @@ def main():
         )
 
         df = GoldMarketTransformer.transform(df)
+
+        if df is None or df.rdd.isEmpty():
+            logger.info("No new data to process, skipping write")
+            return
 
         write_batch(df, "gold_market", GOLD_MARKET_SCHEMA)
 

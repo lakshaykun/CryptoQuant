@@ -4,7 +4,7 @@ import os
 
 from kafka import KafkaProducer
 import json
-from utils.config_loader import load_config
+from utils_global.config_loader import load_config
 
 
 class CryptoProducer:

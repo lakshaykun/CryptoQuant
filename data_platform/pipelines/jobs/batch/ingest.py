@@ -4,8 +4,8 @@ from datetime import datetime
 from pyspark.sql import SparkSession
 from pipelines.schema.state.market import STATE_MARKET_SCHEMA
 from pipelines.storage.delta.reader import get_last_open_time_symbols
-from utils.logger import get_logger
-from utils.config_loader import load_config
+from utils_global.logger import get_logger
+from utils_global.config_loader import load_config
 from pipelines.ingestion.batch.jobs.market.fetch_historical import fetch_market_historical
 from pipelines.storage.delta.writer import write_batch
 
@@ -18,17 +18,17 @@ def main():
     try:
         config = load_config("configs/data.yaml")
 
-        symbols = config.get("symbols", ["BTCUSDT"])
+        symbols = config.get("symbols")
         start_date = datetime.fromisoformat(
-            config.get("start_date", "2026-01-01")
+            config.get("start_date")
         )
-        interval = config.get("interval", "5m")
+        interval = config.get("interval")
 
         last_open_time_symbols = get_last_open_time_symbols(
             spark, "bronze_market", symbols, start_date
         )
 
-        base_path = config.get("raw_data_path", {}).get("market", "/opt/app/raw_data/market/")
+        base_path = config.get("raw_data_path").get("market")
 
         fetch_market_historical(
             symbols,

@@ -4,7 +4,9 @@ numpy
 deltalake
 psycopg2-binary
 joblib
-xgboost
 scikit-learn
 mlflow
 telethon
+xgboost
+catboost
+lightgbm

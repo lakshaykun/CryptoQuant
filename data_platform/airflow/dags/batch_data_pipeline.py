@@ -29,7 +29,6 @@ with DAG(
         bash_command=build_spark_submit(
             "pipelines/jobs/batch/ingest.py"
         ),
-        retries=2
     )
 
     bronze = BashOperator(
@@ -37,7 +36,6 @@ with DAG(
         bash_command=build_spark_submit(
             "pipelines/jobs/batch/bronze.py"
         ),
-        retries=2
     )
 
     silver = BashOperator(
@@ -45,7 +43,6 @@ with DAG(
         bash_command=build_spark_submit(
             "pipelines/jobs/batch/silver.py"
         ),
-        retries=2
     )
 
     gold = BashOperator(
@@ -53,13 +50,11 @@ with DAG(
         bash_command=build_spark_submit(
             "pipelines/jobs/batch/gold.py"
         ),
-        retries=2
     )
 
     cleanup = PythonOperator(
         task_id="cleanup",
         python_callable=cleanup_task,
-        retries=2
     )
 
     ingest >> bronze >> silver >> gold >> cleanup

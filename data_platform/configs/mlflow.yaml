@@ -1,0 +1,5 @@
+# configs/mlflow.yaml
+
+tracking_uri: http://mlflow:5000
+experiment_name: cryptoquant
+model_name: crypto-return-predictor

@@ -1,8 +1,8 @@
 # models/features/feature_engineering.py
 
 import pandas as pd
-from utils.config_loader import load_config
-from utils.logger import get_logger
+from utils_global.config_loader import load_config
+from utils_global.logger import get_logger
 
 logger = get_logger(__name__)
 model_config = load_config("configs/model.yaml")

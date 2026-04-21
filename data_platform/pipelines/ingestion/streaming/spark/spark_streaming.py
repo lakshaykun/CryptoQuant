@@ -7,8 +7,8 @@ from pipelines.schema.silver.market import SILVER_MARKET_SCHEMA
 from pipelines.transformers.bronze.market import BronzeMarketTransformer
 from pipelines.transformers.gold.market import GoldMarketTransformer
 from pipelines.transformers.silver.market import SilverMarketTransformer
-from utils.logger import get_logger
-from utils.config_loader import load_config
+from utils_global.logger import get_logger
+from utils_global.config_loader import load_config
 from pipelines.schema.raw.market import RAW_MARKET_SCHEMA
 from pipelines.utils.spark import get_spark
 from pipelines.storage.delta.writer import write_batch

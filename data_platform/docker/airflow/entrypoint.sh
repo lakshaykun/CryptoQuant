@@ -2,21 +2,21 @@
 
 set -e
 
-echo "Initializing Airflow DB..."
+echo "Starting Airflow..."
 
-if [ ! -f "/opt/airflow/airflow.db" ]; then
-    airflow db init
-fi
+# Always run migrate (safe for Postgres)
+airflow db migrate
 
-echo "Creating Airflow user..."
-airflow users create \
+echo "Creating Airflow user (if not exists)..."
+
+airflow users list | grep airflow > /dev/null 2>&1 || airflow users create \
     --username airflow \
     --password airflow \
     --firstname admin \
     --lastname admin \
     --role Admin \
-    --email admin@example.com || true
+    --email admin@example.com
 
-echo "Starting Airflow..."
+echo "Starting service..."
 
 exec airflow "$@"
