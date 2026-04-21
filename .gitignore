@@ -64,6 +64,11 @@ medallion/**/_last_checkpoint
 # *.sav
 
 # =========================
+# Alembic (DB migrations cache)
+# =========================
+dashboard/backend/db/migrations/__pycache__/
+
+# =========================
 # Spark
 # =========================
 metastore_db/

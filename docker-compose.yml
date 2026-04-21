@@ -39,5 +39,30 @@ services:
              sleep 15 &&
              /opt/kafka/bin/kafka-topics.sh --create --if-not-exists --topic crypto_prices --bootstrap-server crypto-kafka:29092 --partitions 3 --replication-factor 1"
 
+  timescaledb:
+    image: timescale/timescaledb:latest-pg16
+    container_name: crypto-timescaledb
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - timescaledb-data:/var/lib/postgresql/data
+
+  delta-sync:
+    build:
+      context: .
+      dockerfile: pipelines/serving/Dockerfile
+    container_name: crypto-delta-sync
+    depends_on:
+      - timescaledb
+    env_file:
+      - .env
+    volumes:
+      - ./medallion:/app/medallion
+
 volumes:
   kafka-data:
+  timescaledb-data:
