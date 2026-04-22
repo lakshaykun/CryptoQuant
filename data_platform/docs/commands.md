@@ -72,3 +72,13 @@ docker exec -it airflow-scheduler python -m models.monitoring.drift
 curl -u airflow:airflow -X POST http://localhost:8080/api/v1/dags/model_training_pipeline/dagRuns \
   -H "Content-Type: application/json" \
   -d '{"conf":{"trigger_source":"manual"}}'
+
+
+### Dashboard setup
+pip install -r dashboard/requirements.txt
+
+
+### Run dashboard
+streamlit run dashboard/app.py
+
+http://localhost:8501

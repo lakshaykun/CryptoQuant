@@ -1,6 +1,6 @@
 # CryptoQuant Architecture
 
-CryptoQuant is a Binance market MLOps workspace built around batch backfills, live streaming ingestion, Spark + Delta Lake medallion tables, pandas/XGBoost model training, and FastAPI serving.
+CryptoQuant is a Binance market MLOps workspace built around batch backfills, live streaming ingestion, Spark + Delta Lake medallion tables, pandas-based model training, FastAPI serving, and Prometheus-driven observability.
 
 ## Architecture Tree
 
@@ -21,18 +21,27 @@ flowchart LR
     Train[Training and evaluation]
     ModelArtifact[models/artifacts/models/model.pkl]
     FeatureBuild[models/features/build_features.py]
-    API[FastAPI /predict routes]
+    API[FastAPI API + /metrics]
+    Monitoring[Prometheus + exporters]
+    Drift[models/monitoring/drift.py]
+    Retrain[Airflow model_training_pipeline trigger]
 
     Airflow --> BatchJobs
     Airflow --> Train
+    Airflow --> Drift --> Retrain --> Train
+    Monitoring --> API
+    Monitoring --> SparkStream
+    Monitoring --> Airflow
 
     Binance --> BatchJobs --> RawStage --> Bronze --> Silver --> Gold --> ModelData --> Train --> ModelArtifact --> API
     Binance --> StreamJob --> Kafka --> SparkStream --> Bronze
     Gold --> FeatureBuild --> API
     State --> BatchJobs
+    Gold --> Drift
+    ModelArtifact --> API
 ```
 
-The batch path lands historical Binance candles in local CSV staging, then writes Bronze, Silver, and Gold Delta tables. The streaming path pushes live rows through Kafka and uses Spark Structured Streaming to write the same medallion layers. Training and serving both reuse the Gold feature contract.
+The batch path lands historical Binance candles in local CSV staging, then writes Bronze, Silver, and Gold Delta tables. The streaming path pushes live rows through Kafka and uses Spark Structured Streaming to write the same medallion layers. Training and serving both reuse the Gold feature contract. A separate monitoring loop scrapes service metrics, pushes micro-batch metrics, computes drift from Gold versus the training baseline, and can trigger retraining through Airflow when drift persists.
 
 ## File System Tree
 
@@ -48,7 +57,10 @@ The tree below is truncated to the directories and files that define the current
 │   ├── README.md  # Airflow notes
 │   └── dags/
 │       ├── batch_data_pipeline.py  # batch DAG
-│       └── model_training_pipeline.py  # training DAG
+│       ├── batch_predictions_pipeline.py  # batch prediction DAG
+│       ├── drift_monitor_pipeline.py  # drift monitor DAG
+│       ├── model_training_pipeline.py  # training DAG
+│       └── monitoring_callbacks.py  # Prometheus Airflow callbacks
 
 ├── api/  # prediction service
 │   ├── README.md  # API notes
@@ -57,6 +69,21 @@ The tree below is truncated to the directories and files that define the current
 │       ├── model.py  # shared Pydantic models
 │       └── request.py  # request payload models
 
+├── docker/  # container images
+│   ├── airflow/
+│   │   ├── Dockerfile  # Airflow image
+│   │   ├── entrypoint.sh  # Airflow entrypoint
+│   │   └── requirements.txt  # Airflow dependencies
+│   ├── api/
+│   │   ├── Dockerfile  # API image
+│   │   └── requirements.txt  # API dependencies
+│   ├── spark/
+│   │   ├── Dockerfile  # Spark image
+│   │   └── requirements.txt  # Spark dependencies
+│   └── stream_producer/
+│       ├── Dockerfile  # stream producer image
+│       └── requirements.txt  # stream producer dependencies
+
 ├── configs/  # runtime config
 │   ├── README.md  # config notes
 │   ├── data.yaml  # data paths and symbols
@@ -64,33 +91,26 @@ The tree below is truncated to the directories and files that define the current
 │   ├── model.yaml  # model settings
 │   └── spark.yaml  # Spark settings
 
-├── data_platform/  # runtime logs mount
-│   └── logs/  # container log target
-
 ├── delta/  # Delta Lake tables
 │   ├── bronze/
 │   │   └── market/  # bronze market data
+│   ├── checkpoints/  # structured streaming checkpoints
 │   ├── gold/
 │   │   └── market/  # gold feature data
+│   ├── predictions/
+│   │   └── log_return_lead1/  # prediction outputs
 │   ├── raw_data/
 │   │   └── market/  # raw CSV staging
 │   ├── silver/
 │   │   └── market/  # silver cleaned data
 │   └── state/
-│       └── market/  # incremental state
-
-├── docker/  # container images
-│   ├── airflow/
-│   │   ├── Dockerfile  # Airflow image
-|   |   ├── requirements.txt  # Airflow dependencies
-│   │   └── entrypoint.sh  # Airflow entrypoint
-│   └── spark/
-│       ├── requirements.txt  # Spark dependencies
-│       └── Dockerfile  # Spark image
+│       ├── market/  # incremental market state
+│       └── monitoring/  # drift history and retraining state
 
 ├── docs/  # documentation
 │   ├── architecture.md  # architecture doc
 │   ├── commands.md  # run commands
+│   ├── prometheus.md  # Prometheus guide
 │   └── data/
 │       ├── binance.md  # Binance notes
 │       └── storage.md  # storage notes
@@ -117,10 +137,12 @@ The tree below is truncated to the directories and files that define the current
 │   ├── inference/
 │   │   ├── pipeline.py  # inference pipeline
 │   │   └── realtime.py  # runtime predictor
+│   ├── monitoring/
+│   │   ├── __init__.py  # monitoring package marker
+│   │   └── drift.py  # drift detection and retraining trigger
 │   ├── registry/
 │   │   ├── mlflow_registery.py  # MLflow logging
 │   │   └── model_loader.py  # local model loader
-│   ├── targets/  # target definitions
 │   └── training/
 │       ├── hyperparameter_tuning.py  # tuning helper
 │       ├── train.py  # train entrypoint
@@ -129,6 +151,11 @@ The tree below is truncated to the directories and files that define the current
 ├── notebooks/  # exploration notebooks
 │   ├── data_ingest.ipynb  # ingest notebook
 │   └── model.ipynb  # model notebook
+
+├── monitoring/  # platform observability assets
+│   └── prometheus/
+│       ├── alerts.yml  # alert rules
+│       └── prometheus.yml  # scrape config
 
 ├── pipelines/  # data pipeline code
 │   ├── README.md  # pipeline notes
@@ -155,13 +182,16 @@ The tree below is truncated to the directories and files that define the current
 │   │       └── utils/
 │   │           └── helpers.py  # Kafka parsing helper
 │   ├── jobs/
-│   │   └── batch/
-│   │       ├── bronze.py  # bronze job
-│   │       ├── cleanup_raw.py  # raw cleanup job
-│   │       ├── gold.py  # gold job
-│   │       ├── ingest.py  # ingest job
-│   │       ├── silver.py  # silver job
-│   │       └── utils.py  # batch helpers
+│   │   ├── batch/
+│   │   │   ├── bronze.py  # bronze job
+│   │   │   ├── cleanup_raw.py  # raw cleanup job
+│   │   │   ├── gold.py  # gold job
+│   │   │   ├── ingest.py  # ingest job
+│   │   │   ├── silver.py  # silver job
+│   │   │   └── utils.py  # batch helpers
+│   │   └── streaming/
+│   │       ├── spark_predictions.py  # prediction stream job
+│   │       └── spark_streaming.py  # market stream job
 │   ├── schema/
 │   │   ├── bronze/
 │   │   │   └── market.py  # bronze schema
@@ -201,7 +231,8 @@ The tree below is truncated to the directories and files that define the current
 
 └── utils_global/  # shared helpers
     ├── config_loader.py  # YAML loader
-    └── logger.py  # logger helper
+    ├── logger.py  # logger helper
+    └── prometheus.py  # Pushgateway helper and metric naming
 ```
 
 ## Tech Stack
@@ -214,6 +245,7 @@ The tree below is truncated to the directories and files that define the current
 - FastAPI, Pydantic, and Uvicorn for the prediction API.
 - Pandas and NumPy for model-side feature handling and inference preprocessing.
 - XGBoost, scikit-learn, joblib, and MLflow for training, evaluation, artifact loading, and logging.
+- Prometheus, Pushgateway, Node Exporter, cAdvisor, Kafka Exporter, and statsd-exporter for observability.
 - websockets and requests for Binance live and historical ingestion.
 - PyYAML for configuration loading from `configs/*.yaml`.
 - PostgreSQL 15 with `psycopg2-binary` for the Airflow metadata database.
@@ -222,7 +254,10 @@ The tree below is truncated to the directories and files that define the current
 ## Current Runtime State
 
 - `delta/bronze/market/`, `delta/silver/market/`, and `delta/gold/market/` currently contain `_delta_log/` metadata and symbol partitions for `BTCUSDT` and `ETHUSDT`.
-- `delta/state/market/` is currently empty.
+- `delta/predictions/log_return_lead1/` exists for model output tables.
+- `delta/state/market/` and `delta/state/monitoring/` are used for incremental pipeline state and drift/retraining state.
+- `delta/state/monitoring/drift_history/` stores the drift history Delta table.
 - `logs/` contains DAG, scheduler, and processor-manager runtime logs.
 - `data_platform/logs/` is present as the mounted log directory used by the Compose stack.
 - The API is launched from `scripts/run_api.sh`, which sources the local virtual environment when available and runs `uvicorn api.app:app`.
+- Prometheus scrape and alert configuration lives under `monitoring/prometheus/`.
