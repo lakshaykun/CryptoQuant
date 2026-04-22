@@ -10,6 +10,8 @@ mlflow
 xgboost
 catboost
 lightgbm
+requests
+prometheus-client==0.21.0
 
 deltalake==0.17.0
 pyarrow==14.0.2

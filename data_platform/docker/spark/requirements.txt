@@ -13,3 +13,4 @@ psutil==5.9.8
 scipy==1.10.1
 pyarrow==14.0.2
 delta-spark==3.0.0
+prometheus-client==0.21.0

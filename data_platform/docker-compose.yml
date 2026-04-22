@@ -71,6 +71,16 @@ services:
       echo "Done!"
       '
 
+  kafka-exporter:
+    image: danielqsj/kafka-exporter:v1.8.0
+    container_name: kafka-exporter
+    depends_on:
+      - kafka
+    command:
+      - --kafka.server=kafka:9092
+    ports:
+      - "9308:9308"
+
 
   # =========================
   # 🟠 STREAM PRODUCER
@@ -86,6 +96,23 @@ services:
       - topic-init
     volumes:
       - .:/opt/app
+
+  api:
+    build:
+      dockerfile: docker/api/Dockerfile
+    container_name: crypto-api
+    working_dir: /opt/app
+    command: uvicorn api.app:app --host 0.0.0.0 --port 8000 --reload
+    restart: unless-stopped
+    depends_on:
+      - mlflow
+    environment:
+      - PYTHONPATH=/opt/app
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+    volumes:
+      - .:/opt/app
+    ports:
+      - "8000:8000"
     
   # =========================
   # 🔵 SPARK
@@ -98,11 +125,16 @@ services:
       spark-submit
       --master local[2]
       --packages io.delta:delta-spark_2.12:3.0.0,org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0
+      --conf spark.ui.prometheus.enabled=true
+      --conf spark.ui.port=4040
       --conf spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension
       --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog
       /opt/app/pipelines/jobs/streaming/spark_streaming.py
     depends_on:
       - stream-producer
+      - pushgateway
+    ports:
+      - "4040:4040"
     restart: always
 
   spark-predictions:
@@ -117,12 +149,17 @@ services:
       --conf spark.executor.cores=1
       --conf spark.driver.maxResultSize=512m
       --packages io.delta:delta-spark_2.12:3.0.0
+      --conf spark.ui.prometheus.enabled=true
+      --conf spark.ui.port=4040
       --conf spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension
       --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog
       /opt/app/pipelines/jobs/streaming/spark_predictions.py
     depends_on:
       - spark-streaming
       - mlflow
+      - pushgateway
+    ports:
+      - "4041:4040"
     restart: always
   
   spark:
@@ -159,6 +196,7 @@ services:
       - spark
       - postgres
       - mlflow
+      - airflow-statsd-exporter
     ports:
       - "8080:8080"
     environment:
@@ -167,6 +205,11 @@ services:
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
       - AIRFLOW__CORE__DAGS_FOLDER=/opt/app/airflow/dags
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+      - AIRFLOW__API__AUTH_BACKENDS=airflow.api.auth.backend.basic_auth
+      - AIRFLOW__METRICS__STATSD_ON=True
+      - AIRFLOW__METRICS__STATSD_HOST=airflow-statsd-exporter
+      - AIRFLOW__METRICS__STATSD_PORT=9125
+      - AIRFLOW__METRICS__STATSD_PREFIX=airflow
       - PYTHONPATH=/opt/app
     volumes:
       - airflow-home:/opt/airflow
@@ -183,6 +226,7 @@ services:
     user: "0:0"
     depends_on:
       - airflow-webserver
+      - airflow-statsd-exporter
     environment:
       - AIRFLOW_HOME=/opt/airflow
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
@@ -192,6 +236,11 @@ services:
       - AIRFLOW__CORE__DAG_CONCURRENCY=2
       - AIRFLOW__SCHEDULER__MAX_THREADS=2
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+      - AIRFLOW__API__AUTH_BACKENDS=airflow.api.auth.backend.basic_auth
+      - AIRFLOW__METRICS__STATSD_ON=True
+      - AIRFLOW__METRICS__STATSD_HOST=airflow-statsd-exporter
+      - AIRFLOW__METRICS__STATSD_PORT=9125
+      - AIRFLOW__METRICS__STATSD_PREFIX=airflow
       - PYTHONPATH=/opt/app
     volumes:
       - airflow-home:/opt/airflow
@@ -220,6 +269,63 @@ services:
     volumes:
       - mlflow-data:/mlflow
 
+  airflow-statsd-exporter:
+    image: prom/statsd-exporter:v0.26.1
+    container_name: airflow-statsd-exporter
+    ports:
+      - "9102:9102"
+      - "9125:9125/udp"
+
+  pushgateway:
+    image: prom/pushgateway:v1.8.0
+    container_name: pushgateway
+    ports:
+      - "9091:9091"
+
+  node-exporter:
+    image: prom/node-exporter:v1.8.1
+    container_name: node-exporter
+    command:
+      - "--path.rootfs=/host"
+    volumes:
+      - "/:/host:ro,rslave"
+    ports:
+      - "9100:9100"
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: cadvisor
+    privileged: true
+    devices:
+      - /dev/kmsg
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:rw
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    ports:
+      - "8088:8080"
+
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--web.enable-lifecycle"
+    depends_on:
+      - api
+      - node-exporter
+      - cadvisor
+      - kafka-exporter
+      - pushgateway
+      - airflow-statsd-exporter
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+
 # =========================
 # 📦 VOLUMES
 # =========================
@@ -230,3 +336,4 @@ volumes:
   spark-ivy:
   airflow-logs:
   mlflow-data:
+  prometheus-data:

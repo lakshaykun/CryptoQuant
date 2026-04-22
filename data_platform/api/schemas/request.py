@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
 
 class CryptoFeatures(BaseModel):
     open_time: datetime 
@@ -42,6 +42,7 @@ class CryptoFeatures(BaseModel):
 
     trend_strength: float
     volatility_ratio: float
+    actual_log_return_lead1: Optional[float] = None
 
 
 class PredictRequest(BaseModel):

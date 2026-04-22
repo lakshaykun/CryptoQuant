@@ -113,3 +113,32 @@ model_params:
         random_state: 42
 
 model_name: "crypto-return-predictor"
+
+monitoring:
+    drift:
+        recent_window: 5000
+        baseline_window: 20000
+        min_rows: 200
+        psi_bins: 10
+        data_drift_threshold: 0.20
+        prediction_drift_threshold: 0.25
+        rmse_increase_threshold: 0.15
+
+    retraining:
+        airflow_api_url: "http://airflow-webserver:8080/api/v1"
+        dag_id: "model_training_pipeline"
+        username: "airflow"
+        password: "airflow"
+        cooldown_minutes: 30
+        state_path: "/opt/app/delta/state/monitoring/retraining_state.json"
+
+    scheduler:
+        interval_minutes: 5
+
+    metrics:
+        namespace: "cryptoquant"
+        pushgateway_url: "http://pushgateway:9091"
+        job_name: "drift_monitor"
+
+    history:
+        path: "/opt/app/delta/state/monitoring/drift_history"

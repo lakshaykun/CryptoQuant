@@ -1,6 +1,7 @@
 from airflow import DAG
 from airflow.operators.bash import BashOperator
 from datetime import datetime, timedelta
+from monitoring_callbacks import dag_failure_callback, dag_success_callback
 
 
 def build_spark_submit(task_script):
@@ -18,6 +19,8 @@ with DAG(
     dag_id="batch_predictions_pipeline",
     start_date=datetime(2024, 1, 1),
     catchup=False,
+    on_success_callback=dag_success_callback,
+    on_failure_callback=dag_failure_callback,
 ) as dag:
 
     predict = BashOperator(

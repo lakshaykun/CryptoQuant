@@ -53,3 +53,22 @@ sudo chown -R $USER:$USER .
 ### Streaming job
 docker exec -it spark-master \
 spark-submit pipelines/ingestion/streaming/spark/spark_streaming.py
+
+
+### Monitoring stack
+docker compose up -d prometheus pushgateway node-exporter cadvisor kafka-exporter airflow-statsd-exporter api
+
+http://localhost:9090  # Prometheus UI
+http://localhost:8000/metrics  # FastAPI metrics
+http://localhost:9100/metrics  # Node exporter
+http://localhost:9091/metrics  # Pushgateway
+
+
+### Run drift monitor manually
+docker exec -it airflow-scheduler python -m models.monitoring.drift
+
+
+### Manual retraining trigger via Airflow API
+curl -u airflow:airflow -X POST http://localhost:8080/api/v1/dags/model_training_pipeline/dagRuns \
+  -H "Content-Type: application/json" \
+  -d '{"conf":{"trigger_source":"manual"}}'

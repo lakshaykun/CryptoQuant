@@ -6,6 +6,7 @@ from airflow.operators.python import PythonOperator
 from datetime import datetime, timedelta
 from pipelines.jobs.batch.cleanup_raw import cleanup_task
 from airflow.operators.trigger_dagrun import TriggerDagRunOperator
+from monitoring_callbacks import dag_failure_callback, dag_success_callback
 
 def build_spark_submit(task_script):
     return f"""
@@ -21,7 +22,9 @@ with DAG(
     dag_id="batch_data_pipeline",
     start_date=datetime(2024, 1, 1),
     schedule="@daily",
-    catchup=False
+    catchup=False,
+    on_success_callback=dag_success_callback,
+    on_failure_callback=dag_failure_callback,
 ) as dag:
 
     ingest_historical = BashOperator(

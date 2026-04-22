@@ -1,3 +1,7 @@
+import time
+from datetime import datetime, timezone
+
+from prometheus_client import Gauge
 from pyspark.sql import functions as F
 
 from models.inference.realtime import RealtimePredictor
@@ -6,6 +10,7 @@ from pipelines.storage.delta.writer import write_batch
 from pipelines.utils.spark import get_spark
 from utils_global.config_loader import load_config
 from utils_global.logger import get_logger
+from utils_global.prometheus import build_registry, metric_name, push_registry
 
 
 logger = get_logger("spark_predictions")
@@ -14,15 +19,77 @@ spark = get_spark(logger)
 predictor = None
 
 
+def _normalize_open_time(value):
+    if value is None:
+        return None
+
+    if isinstance(value, datetime):
+        return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
+
+    if isinstance(value, (int, float)):
+        seconds = float(value)
+        if seconds > 1e12:
+            seconds /= 1000.0
+        return datetime.fromtimestamp(seconds, tz=timezone.utc)
+
+    try:
+        return datetime.fromtimestamp(float(value), tz=timezone.utc)
+    except (TypeError, ValueError, OSError):
+        return None
+
+
+def _estimate_streaming_lag_seconds(df):
+    max_open_time = df.select(F.max("open_time").alias("max_open_time")).collect()[0]["max_open_time"]
+    max_open_time = _normalize_open_time(max_open_time)
+    if max_open_time is None:
+        return 0.0
+
+    lag = (datetime.now(timezone.utc) - max_open_time).total_seconds()
+    return float(max(lag, 0.0))
+
+
+def _push_streaming_metrics(records_processed, batch_processing_time, streaming_lag):
+    registry = build_registry()
+
+    records_metric = Gauge(
+        metric_name("records_processed"),
+        "Number of records processed in the latest Spark predictions micro-batch.",
+        ["pipeline_job"],
+        registry=registry,
+    )
+    batch_time_metric = Gauge(
+        metric_name("batch_processing_time_seconds"),
+        "Processing time in seconds for the latest Spark predictions micro-batch.",
+        ["pipeline_job"],
+        registry=registry,
+    )
+    lag_metric = Gauge(
+        metric_name("streaming_lag_seconds"),
+        "Lag in seconds between now and latest open_time scored by prediction stream.",
+        ["pipeline_job"],
+        registry=registry,
+    )
+
+    records_metric.labels(pipeline_job="spark_predictions").set(float(records_processed))
+    batch_time_metric.labels(pipeline_job="spark_predictions").set(float(batch_processing_time))
+    lag_metric.labels(pipeline_job="spark_predictions").set(float(streaming_lag))
+
+    push_registry(registry, job_name="spark_predictions", grouping_key={"component": "spark_predictions"})
+
+
 def _process_predictions(df, epoch_id):
     global predictor
 
-    if df is None or df.rdd.isEmpty():
+    if df is None:
         return
+
+    start_time = time.perf_counter()
 
     valid_rows = df.filter(F.col("is_valid_feature_row") == True)
 
-    if valid_rows.rdd.isEmpty():
+    records_processed = valid_rows.count()
+
+    if records_processed == 0:
         return
 
     pdf = valid_rows.toPandas()
@@ -75,6 +142,17 @@ def _process_predictions(df, epoch_id):
         result_df,
         "predictions_log_return_lead1",
         expected_schema=PREDICTIONS_LOG_RETURN_LEAD1_SCHEMA,
+    )
+
+    duration = time.perf_counter() - start_time
+    lag_seconds = _estimate_streaming_lag_seconds(valid_rows)
+    _push_streaming_metrics(records_processed, duration, lag_seconds)
+    logger.info(
+        "[spark_predictions] epoch=%s records=%s duration=%.3fs lag=%.3fs",
+        epoch_id,
+        records_processed,
+        duration,
+        lag_seconds,
     )
 
 

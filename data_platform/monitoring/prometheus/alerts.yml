@@ -1,0 +1,76 @@
+groups:
+  - name: cryptoquant-drift-alerts
+    rules:
+      - alert: CryptoQuantHighDataDrift
+        expr: cryptoquant_data_drift_score > 0.2
+        for: 5m
+        labels:
+          severity: warning
+          team: mlops
+        annotations:
+          summary: "High data drift detected"
+          description: "Data drift score is above threshold for the last 5 minutes."
+
+      - alert: CryptoQuantHighPredictionDrift
+        expr: cryptoquant_prediction_drift_score > 0.25
+        for: 5m
+        labels:
+          severity: critical
+          team: mlops
+        annotations:
+          summary: "High prediction drift detected"
+          description: "Prediction drift score is above threshold and model quality is degrading."
+
+      - alert: CryptoQuantDriftAlertRaised
+        expr: cryptoquant_drift_alert == 1
+        for: 2m
+        labels:
+          severity: critical
+          team: mlops
+        annotations:
+          summary: "Drift monitor raised retraining alert"
+          description: "Drift monitor flagged retraining condition."
+
+  - name: cryptoquant-performance-alerts
+    rules:
+      - alert: CryptoQuantPredictionErrorSpike
+        expr: histogram_quantile(0.95, sum(rate(cryptoquant_api_prediction_error_bucket[10m])) by (le)) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+          team: mlops
+        annotations:
+          summary: "Prediction error spike"
+          description: "p95 API prediction error exceeded 0.05 over the last 10 minutes."
+
+      - alert: CryptoQuantPredictionRMSETrendWorse
+        expr: cryptoquant_prediction_rmse_ratio > 1.2
+        for: 10m
+        labels:
+          severity: warning
+          team: mlops
+        annotations:
+          summary: "Prediction RMSE trend worsened"
+          description: "Recent RMSE is more than 20% above baseline RMSE."
+
+  - name: cryptoquant-pipeline-alerts
+    rules:
+      - alert: CryptoQuantStreamingLag
+        expr: max(cryptoquant_streaming_lag_seconds) > 120
+        for: 5m
+        labels:
+          severity: critical
+          team: data-platform
+        annotations:
+          summary: "Streaming lag is too high"
+          description: "Streaming lag exceeded 120 seconds."
+
+      - alert: CryptoQuantAirflowDagFailure
+        expr: cryptoquant_airflow_dag_last_run_status{status="failure"} == 1
+        for: 1m
+        labels:
+          severity: warning
+          team: mlops
+        annotations:
+          summary: "Airflow DAG failure detected"
+          description: "The latest DAG run status is failure."
