@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 from fastapi import FastAPI, HTTPException
 from models.inference.realtime import RealtimePredictor
-from api.schemas.request import CryptoFeatures, PredictEngineeredRequest
+from api.schemas.request import PredictRequest
 
 app = FastAPI(
     title="CryptoQuant",
@@ -15,41 +15,9 @@ def health_check():
     return {
         "status": "running"
     }
-@app.post("/predict/base")
-def predictBase(data: list[CryptoFeatures]):
 
-    predictor = RealtimePredictor()
-
-    if len(data) == 0:
-        raise HTTPException(
-            status_code=400,
-            detail="No data provided"
-        )
-
-    # Convert to list of dicts
-    records = [feature.model_dump() for feature in data]
-
-    # Create DataFrame
-    X = pd.DataFrame(records)
-
-    if X.empty:
-        raise HTTPException(
-            status_code=400,
-            detail="No data provided"
-        )
-
-    try:
-        prediction = predictor.predictBase(X)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    return {"prediction": np.asarray(prediction).tolist()}
-
-@app.post("/predict/engineered")
-def predictEngineered(data: PredictEngineeredRequest):
-
-    predictor = RealtimePredictor()
-
+@app.post("/predict")
+def predict(data: PredictRequest):
     if len(data.data) == 0:
         raise HTTPException(
             status_code=400,
@@ -66,7 +34,10 @@ def predictEngineered(data: PredictEngineeredRequest):
         )
 
     try:
+        predictor = RealtimePredictor()
         prediction = predictor.predict(X)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

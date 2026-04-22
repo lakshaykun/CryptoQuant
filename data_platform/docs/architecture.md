@@ -199,7 +199,7 @@ The tree below is truncated to the directories and files that define the current
 │   ├── README.md  # script notes
 │   └── run_api.sh  # API launcher
 
-└── utils/  # shared helpers
+└── utils_global/  # shared helpers
     ├── config_loader.py  # YAML loader
     └── logger.py  # logger helper
 ```

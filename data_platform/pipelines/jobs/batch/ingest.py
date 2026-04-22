@@ -2,12 +2,13 @@
 
 from datetime import datetime
 from pyspark.sql import SparkSession
-from pipelines.schema.state.market import STATE_MARKET_SCHEMA
-from pipelines.storage.delta.reader import get_last_open_time_symbols
+from pipelines.storage.delta.reader import (
+    check_table_exists,
+    get_last_processed_time_symbols,
+)
 from utils_global.logger import get_logger
 from utils_global.config_loader import load_config
 from pipelines.ingestion.batch.jobs.market.fetch_historical import fetch_market_historical
-from pipelines.storage.delta.writer import write_batch
 
 
 def main():
@@ -19,14 +20,24 @@ def main():
         config = load_config("configs/data.yaml")
 
         symbols = config.get("symbols")
-        start_date = datetime.fromisoformat(
-            config.get("start_date")
-        )
+        state_date_value = config.get("state_date") or config.get("start_date")
+        if not state_date_value:
+            raise ValueError("data.yaml must define either 'state_date' or 'start_date'")
+
+        state_date = datetime.fromisoformat(state_date_value)
         interval = config.get("interval")
 
-        last_open_time_symbols = get_last_open_time_symbols(
-            spark, "bronze_market", symbols, start_date
-        )
+        if check_table_exists(spark, "market_state"):
+            last_open_time_symbols = get_last_processed_time_symbols(
+                spark,
+                "market_state",
+                symbols,
+                state_date,
+            )
+            logger.info("Loaded ingestion checkpoint from market_state")
+        else:
+            last_open_time_symbols = {symbol: state_date for symbol in symbols}
+            logger.info("market_state missing, bootstrapped checkpoint from config state_date")
 
         base_path = config.get("raw_data_path").get("market")
 
@@ -39,22 +50,6 @@ def main():
         )
 
         logger.info("Ingestion complete")
-
-        state_df = spark.createDataFrame(
-            [(symbol, last_time) for symbol, last_time in last_open_time_symbols.items()],
-            ["symbol", "last_processed_time"]
-        )
-
-        # Update state table with new last processed times
-        write_batch(
-            state_df,
-            "market_state",
-            STATE_MARKET_SCHEMA,
-            mode = "overwrite",
-            upsert = False
-        )
-
-        logger.info("State table updated")
 
     finally:
         spark.stop()

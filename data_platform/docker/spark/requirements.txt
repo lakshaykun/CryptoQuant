@@ -1,5 +1,7 @@
+# docker/spark/requirements.txt
+
 pyyaml
 pandas
 numpy
 requests
-deltalake
+delta-spark==3.0.0

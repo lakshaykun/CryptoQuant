@@ -2,22 +2,20 @@
 
 interval: "1m"
 start_date: "2026-01-01"
+state_date: "2026-01-01"
 
 tables:
     bronze_market:
         "path": "/opt/app/delta/bronze/market/"
         "partition_by": ["symbol", "date"]
-        "checkpoint": "/opt/app/delta/checkpoint/bronze/market/"
 
     silver_market:
         "path": "/opt/app/delta/silver/market/"
         "partition_by": ["symbol", "date"]
-        "checkpoint": "/opt/app/delta/checkpoint/silver/market/"
 
     gold_market:
         "path": "/opt/app/delta/gold/market/"
         "partition_by": ["symbol", "date"]
-        "checkpoint": "/opt/app/delta/checkpoint/gold/market/"
 
     market_state:
         "path": "/opt/app/delta/state/market/"
@@ -25,7 +23,13 @@ tables:
 raw_data_path:
     market: "/opt/app/delta/raw_data/market/"
 
+checkpoints:
+    market: "/opt/app/delta/checkpoints/market/"
+
 
 symbols: ["BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT", "USDCUSDT"]
 
-binance_ws_uri: "wss://cryptoquantproducer.onrender.com/ws/binance/live?symbols=btcusdt,ethusdt&interval=1m"
+
+render_uri:
+    market_live: "wss://cryptoquantproducer.onrender.com/ws/binance/live"
+    market_today: "https://cryptoquantproducer.onrender.com/binance/backfill"

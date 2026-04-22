@@ -3,40 +3,23 @@ from datetime import datetime
 from pydantic import BaseModel
 from typing import List
 
-
 class CryptoFeatures(BaseModel):
-    open_time: datetime
+    open_time: datetime 
+    symbol: str = "BTCUSDT"
+
     open: float
     high: float
     low: float
     close: float
     volume: float
-    close_time: datetime
-    quote_volume: float
-    symbol: str = "BTCUSDT"
     trades: int
     taker_buy_base: float
-    taker_buy_quote: float
-    ignore: float
-
-
-class PredictRequest(BaseModel):
-    data: List[CryptoFeatures]
-
-
-class CryptoEngineeredFeatures(BaseModel):
-    open_time: datetime
-    close: float
-    volume: float
-    trades: int
-    taker_buy_base: float
-    symbol: str = "BTCUSDT"
 
     log_return: float
     volatility: float
+
     imbalance_ratio: float
     buy_ratio: float
-    vwap: float
 
     log_return_lag1: float
     log_return_lag2: float
@@ -51,7 +34,6 @@ class CryptoEngineeredFeatures(BaseModel):
 
     momentum: float
     volume_spike: float
-
     price_range_ratio: float
     body_size: float
 
@@ -62,5 +44,5 @@ class CryptoEngineeredFeatures(BaseModel):
     volatility_ratio: float
 
 
-class PredictEngineeredRequest(BaseModel):
-    data: List[CryptoEngineeredFeatures]
+class PredictRequest(BaseModel):
+    data: List[CryptoFeatures]

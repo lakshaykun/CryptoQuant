@@ -1,63 +1,113 @@
 # docker-compose.yml
 
+x-spark-base: &spark-base
+  build:
+    dockerfile: docker/spark/Dockerfile
+  environment:
+    - PYTHONPATH=/opt/app
+    - PATH=/opt/spark/bin:$PATH
+  volumes:
+    - .:/opt/app
+    - spark-ivy:/root/.ivy2
+
 services:
   # =========================
   # 🟡 KAFKA
   # =========================
-  # kafka:
-  #   image: apache/kafka:3.7.0
-  #   container_name: crypto-kafka
-  #   ports:
-  #     - "9092:9092"
-  #   volumes:
-  #     - kafka-data:/var/lib/kafka/data
-  #   environment:
-  #     KAFKA_CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
-  #     KAFKA_NODE_ID: 1
-  #     KAFKA_PROCESS_ROLES: broker,controller
-  #     KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+  kafka:
+    image: apache/kafka:3.7.0
+    container_name: kafka
+    ports:
+      - "9092:9092"
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    environment:
+      KAFKA_CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
 
-  #     KAFKA_LISTENERS: PLAINTEXT://:9092,PLAINTEXT_INTERNAL://:29092,CONTROLLER://:9093
-  #     KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_INTERNAL://crypto-kafka:29092
-  #     KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
 
-  #     KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT_INTERNAL
-  #     KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
 
-  #     KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
 
-  #     KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-  #     KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
-  #     KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+  topic-init:
+    image: apache/kafka:3.7.0
+    container_name: kafka-topic-init
+    depends_on:
+      - kafka
+    command: |
+      sh -c '
+      echo "Waiting for Kafka to be ready..."
 
-  # topic-init:
-  #   image: apache/kafka:3.7.0
-  #   depends_on:
-  #     - kafka
-  #   command: >
-  #     sh -c "sleep 15 &&
-  #            /opt/kafka/bin/kafka-topics.sh --create --if-not-exists
-  #            --topic crypto_prices
-  #            --bootstrap-server crypto-kafka:29092
-  #            --partitions 3 --replication-factor 1"
+      until nc -z kafka 9092; do
+        sleep 2
+      done
 
+      until /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --list; do
+        sleep 2
+      done
+
+      echo "Kafka is ready. Creating topic..."
+
+      /opt/kafka/bin/kafka-topics.sh --create --if-not-exists \
+        --topic crypto_prices \
+        --bootstrap-server kafka:9092 \
+        --partitions 3 \
+        --replication-factor 1
+
+      echo "Done!"
+      '
+
+
+  # =========================
+  # 🟠 STREAM PRODUCER
+  # =========================
+  stream-producer:
+    build:
+      dockerfile: docker/stream_producer/Dockerfile
+    container_name: stream-producer
+    command: python pipelines/ingestion/streaming/jobs/crypto_stream_job.py
+    restart: always
+    depends_on:
+      - kafka
+      - topic-init
+    volumes:
+      - .:/opt/app
+    
   # =========================
   # 🔵 SPARK
   # =========================
+  spark-streaming:
+    <<: *spark-base
+    container_name: spark-streaming
+    working_dir: /opt/app
+    command: >
+      spark-submit
+      --master local[*]
+      --packages io.delta:delta-spark_2.12:3.0.0,org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0
+      --conf spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension
+      --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog
+      /opt/app/pipelines/jobs/streaming/spark_streaming.py
+    depends_on:
+      - stream-producer
+    restart: always
+  
   spark:
-    build:
-      dockerfile: docker/spark/Dockerfile
+    <<: *spark-base
     container_name: spark
     user: "0:0"
     working_dir: /opt/app
     command: tail -f /dev/null
     restart: unless-stopped
-    environment:
-      - PYTHONPATH=/opt/app
-      - PATH=/opt/spark/bin:$PATH
-    volumes:
-      - .:/opt/app
-      - spark-ivy:/home/spark/.ivy2
 
   # =========================
   # 🟢 AIRFLOW
@@ -145,7 +195,7 @@ services:
 # 📦 VOLUMES
 # =========================
 volumes:
-  # kafka-data:
+  kafka-data:
   postgres-db-volume:
   airflow-home:
   spark-ivy:

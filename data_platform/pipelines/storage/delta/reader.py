@@ -201,45 +201,40 @@ def get_last_value(
         return None
     
 
-def get_last_open_time_symbols(
-        spark: SparkSession, 
+def get_last_processed_time_symbols(
+        spark: SparkSession,
         table_name: str,
-        symbols: List[str], 
-        start_date: datetime.datetime
+        symbols: List[str],
+        fallback_time: datetime.datetime
 ) -> dict:
-    '''Returns max open_time per symbol (used for incremental pipelines).'''
+    '''Returns last_processed_time per symbol from a state/checkpoint table.'''
 
     table_config = get_table_config(table_name, CONFIG)
-    
+
     try:
         df = spark.read.format("delta").load(table_config["path"])
 
-        # Filter only required symbols (important for performance)
         df = df.filter(F.col("symbol").isin(symbols))
 
-        # Get max open_time per symbol
         result_df = (
             df.groupBy("symbol")
-              .agg(F.max("open_time").alias("max_time"))
+              .agg(F.max("last_processed_time").alias("last_processed_time"))
         )
 
-        # Convert to dict: symbol -> open_time
         result = {
-            row["symbol"]: row["max_time"]
-            for row in result_df.collect()
-            if row["max_time"] is not None
+            symbol: fallback_time
+            for symbol in symbols
         }
 
-        # Ensure all symbols exist in output (even if no data)
-        for symbol in symbols:
-            if symbol not in result:
-                result[symbol] = start_date
+        for row in result_df.collect():
+            if row["last_processed_time"] is not None:
+                result[row["symbol"]] = row["last_processed_time"]
 
         return result
 
     except Exception as e:
-        logger.warning(f"No existing bronze data found: {e}")
-        return {symbol: start_date for symbol in symbols}
+        logger.warning(f"[{table_name}] No state data found or error → {e}")
+        return {symbol: fallback_time for symbol in symbols}
     
 
 def check_table_exists(spark: SparkSession, table_name: str) -> bool:

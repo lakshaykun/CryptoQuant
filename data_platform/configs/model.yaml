@@ -126,3 +126,5 @@ model_params:
         C: 0.5                  # ↓ safer
         gamma: 0.1
         epsilon: 0.01
+
+model_name: "model_xgboost"

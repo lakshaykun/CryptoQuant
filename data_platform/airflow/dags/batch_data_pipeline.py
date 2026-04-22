@@ -3,7 +3,7 @@
 from airflow import DAG
 from airflow.operators.bash import BashOperator
 from airflow.operators.python import PythonOperator
-from datetime import datetime
+from datetime import datetime, timedelta
 from pipelines.jobs.batch.cleanup_raw import cleanup_task
 
 
@@ -24,11 +24,20 @@ with DAG(
     catchup=False
 ) as dag:
 
-    ingest = BashOperator(
-        task_id="ingest",
+    ingest_historical = BashOperator(
+        task_id="ingest_historical",
         bash_command=build_spark_submit(
             "pipelines/jobs/batch/ingest.py"
         ),
+    )
+
+    ingest_today = BashOperator(
+        task_id="ingest_today",
+        bash_command=build_spark_submit(
+            "pipelines/jobs/batch/ingest_today.py"
+        ),
+        retries=4,
+        retry_delay=timedelta(minutes=2),
     )
 
     bronze = BashOperator(
@@ -57,4 +66,6 @@ with DAG(
         python_callable=cleanup_task,
     )
 
-    ingest >> bronze >> silver >> gold >> cleanup
+    ingest_historical >> bronze
+    ingest_today >> bronze
+    bronze >> silver >> gold >> cleanup

@@ -1,4 +1,4 @@
-# pipelines/ingestion/streaming/spark/spark_streaming.py
+# pipelines/jobs/streaming/spark_streaming.py
 
 from pipelines.ingestion.streaming.utils.helpers import parse_kafka_message
 from pipelines.schema.bronze.market import BRONZE_MARKET_SCHEMA
@@ -12,9 +12,6 @@ from utils_global.config_loader import load_config
 from pipelines.schema.raw.market import RAW_MARKET_SCHEMA
 from pipelines.utils.spark import get_spark
 from pipelines.storage.delta.writer import write_batch
-import os
-
-env = os.getenv("ENV", "host")
 
 
 kafkaConfig = load_config("configs/kafka.yaml")
@@ -66,7 +63,7 @@ def _process_pipeline(df, epoch_id):
 # -------------------------------
 # 1. READ FROM KAFKA
 # -------------------------------
-brokers = kafkaConfig["brokers"][env]
+brokers = kafkaConfig["brokers"]
 
 df = spark.readStream \
     .format("kafka") \
@@ -79,7 +76,7 @@ parsed_df = parse_kafka_message(df, RAW_MARKET_SCHEMA)
 
 parsed_df.writeStream \
     .foreachBatch(_process_pipeline) \
-    .option("checkpointLocation", "medallion/checkpoints/pipeline") \
+    .option("checkpointLocation", dataConfig["checkpoints"]["market"]) \
     .start()
 
 spark.streams.awaitAnyTermination()
