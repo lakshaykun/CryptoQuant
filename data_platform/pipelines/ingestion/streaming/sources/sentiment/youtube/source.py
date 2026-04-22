@@ -70,7 +70,27 @@ def _youtube_client():
     if not youtube_api_key:
         logger.warning("YOUTUBE_API_KEY is missing; youtube ingestion will publish 0 events")
         return None
-    return build("youtube", "v3", developerKey=youtube_api_key)
+
+    youtube = build("youtube", "v3", developerKey=youtube_api_key)
+
+    # 🔍 Test API key with a simple request
+    try:
+        response = youtube.videos().list(
+            part="id",
+            chart="mostPopular",
+            maxResults=1
+        ).execute()
+
+        if "items" in response:
+            logger.info("✅ YouTube API key is working correctly")
+        else:
+            logger.warning("⚠️ YouTube API responded but no data returned")
+
+    except Exception as e:
+        logger.error(f"❌ YouTube API key is INVALID or request failed: {e}")
+        return None
+
+    return youtube
 
 
 def _video_like_percentage(youtube, video_id: str) -> float:

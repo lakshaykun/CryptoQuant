@@ -139,7 +139,7 @@ youtube:
     BNB: "binance BNB"
     XRP: "ripple XRP"
 
-  max_comments_per_channel: 200
+  max_comments_per_channel: 500
   lookback_hours: 6
 
 # ────────────────────────────────────────────────────────────
@@ -198,7 +198,7 @@ telegram:
       - xrpl
       - sec
 
-  max_messages_per_channel: 200
+  max_messages_per_channel: 500
   interval_seconds: 180
   lookback_hours: 6
 
@@ -290,7 +290,7 @@ news:
       - "xrpl"
       - cbdc
 
-  max_entries_per_feed: 25
+  max_entries_per_feed: 100
   interval_seconds: 120
   engagement_weights:
     comments: 0.45

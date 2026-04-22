@@ -164,8 +164,9 @@ def _score_row_batch(rows: list, client: CryptoBertClient) -> list[tuple]:
 
     scored_rows: list[tuple] = []
     for row, (label, confidence, base_score) in zip(rows, results):
-        engagement = float(getattr(row, "engagement", 0) or 0)
-        weighted_sentiment = float(base_score) * float(confidence) * engagement
+        #engagement = float(getattr(row, "engagement", 0) or 0)
+        # weighted_sentiment = float(base_score) * float(confidence) * engagement
+        weighted_sentiment = float(base_score) * float(confidence) 
         scored_rows.append(
             (
                 getattr(row, "id", None),
