@@ -1,11 +1,11 @@
 # CryptoQuant Render Producer
 
-The Render API is the public WebSocket proxy for Binance market data. It exposes a backfill endpoint for the current trading day and a live endpoint that forwards closed Binance kline events to downstream consumers.
+The Render API is the public proxy for Binance market data. It exposes a backfill endpoint for the current trading day and a live websocket endpoint that forwards closed Binance kline events to downstream consumers.
 
 ## Endpoints
 
 - `GET /` - health check.
-- `WS /ws/binance/backfill` - sends the current day's historical candles by symbol.
+- `GET /binance/backfill?symbol=BTCUSDT&interval=1m` - returns the current day's historical candles for one symbol in a single JSON response.
 - `WS /ws/binance/live` - streams live closed candles with heartbeat messages.
 
 ## Key files
