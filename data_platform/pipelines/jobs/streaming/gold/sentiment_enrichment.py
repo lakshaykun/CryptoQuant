@@ -43,15 +43,17 @@ GOLD_TRIGGER_SECONDS = get_gold_trigger_seconds(5)
 APP_NAME = f"{get_spark_app_name()}-gold"
 GOLD_REALTIME_CSV_PATH = str((Path(GOLD_DELTA_PATH).parent / "gold_sentiment_realtime.csv").resolve())
 EMA_LOOKBACK = 10
-CSV_HEADERS = [
-    "minute_time",
-    "symbol",
-    "sentiment_index",
-    "total_engagement",
-    "avg_confidence",
-    "message_count",
-    "is_observed",
-]
+
+# ── Canonical symbol order — drives pivot column ordering in the CSV ───────────
+SYMBOLS = ["BTC", "ETH", "SOL", "BNB", "XRP"]
+
+# Wide-format CSV: one row per minute_time, one sentiment-index column per symbol.
+# Schema: minute_time | BTC_sentiment_index | ETH_sentiment_index | … | total_message_count
+CSV_HEADERS = (
+    ["minute_time"]
+    + [f"{sym}_sentiment_index" for sym in SYMBOLS]
+    + ["total_message_count"]
+)
 
 
 @dataclass
@@ -145,32 +147,35 @@ def _ensure_realtime_csv() -> Path:
 
 
 def _load_csv_state_from_disk(csv_path: Path) -> None:
+    """Restore per-symbol EMA history from the existing wide-format CSV."""
     if not csv_path.exists():
         return
 
     with csv_path.open("r", newline="", encoding="utf-8") as handle:
         reader = csv.DictReader(handle)
         for row in reader:
-            symbol = (row.get("symbol") or "").strip()
             minute_text = (row.get("minute_time") or "").strip()
-            sentiment_text = (row.get("sentiment_index") or "").strip()
-            if not symbol or not minute_text or not sentiment_text:
+            if not minute_text:
                 continue
-
             try:
                 minute_time = datetime.fromisoformat(minute_text)
-                sentiment_value = float(sentiment_text)
             except ValueError:
                 continue
 
-            state = _csv_state_by_symbol.setdefault(symbol, CsvSymbolState())
-            state.sentiment_history.append(sentiment_value)
-            if state.last_minute is None or minute_time >= state.last_minute:
-                state.last_minute = minute_time
-                state.last_avg_confidence = _to_float(
-                    row.get("avg_confidence"),
-                    state.last_avg_confidence,
-                )
+            for sym in SYMBOLS:
+                col = f"{sym}_sentiment_index"
+                sentiment_text = (row.get(col) or "").strip()
+                if not sentiment_text:
+                    continue
+                try:
+                    sentiment_value = float(sentiment_text)
+                except ValueError:
+                    continue
+
+                state = _csv_state_by_symbol.setdefault(sym, CsvSymbolState())
+                state.sentiment_history.append(sentiment_value)
+                if state.last_minute is None or minute_time >= state.last_minute:
+                    state.last_minute = minute_time
 
 
 def _initialize_csv_state() -> Path:
@@ -226,57 +231,75 @@ def _extract_actual_rows_by_minute(batch_df) -> dict[str, dict[datetime, dict[st
 def _build_realtime_csv_rows(
     actual_rows_by_symbol: dict[str, dict[datetime, dict[str, float | int]]],
 ) -> list[dict[str, str]]:
-    rows_to_write: list[dict[str, str]] = []
+    """Build one wide CSV row per minute_time covering ALL symbols.
+
+    Schema per emitted row
+    ----------------------
+    minute_time              : ISO-8601 wall-clock minute
+    {SYM}_sentiment_index    : sentiment index for that symbol (EMA-filled when unobserved)
+    total_message_count      : sum of message_count across all symbols for that minute
+    """
     now_minute = datetime.now().replace(second=0, microsecond=0)
 
-    symbols = set(_csv_state_by_symbol.keys()) | set(actual_rows_by_symbol.keys())
-    for symbol in sorted(symbols):
-        state = _csv_state_by_symbol.setdefault(symbol, CsvSymbolState())
-        actual_by_minute = actual_rows_by_symbol.get(symbol, {})
-        latest_actual_minute = max(actual_by_minute.keys()) if actual_by_minute else None
+    # Collect every minute that appears in at least one symbol's observed data.
+    all_minutes: set[datetime] = set()
+    for sym_data in actual_rows_by_symbol.values():
+        all_minutes.update(sym_data.keys())
 
-        # Emit at most one row per symbol per wall-clock minute.
-        # This avoids large catch-up backfills when the stream is idle.
-        if state.last_minute is not None and state.last_minute >= now_minute:
+    # Always include the current wall-clock minute so we keep emitting during
+    # stream idle periods (uses EMA fill for every symbol).
+    all_minutes.add(now_minute)
+
+    rows_to_write: list[dict[str, str]] = []
+
+    for minute_time in sorted(all_minutes):
+        # Skip if this minute has already been emitted for every symbol.
+        all_written = all(
+            _csv_state_by_symbol.get(sym) is not None
+            and _csv_state_by_symbol[sym].last_minute is not None
+            and _csv_state_by_symbol[sym].last_minute >= minute_time
+            for sym in SYMBOLS
+        )
+        if all_written:
             continue
 
-        minute_time = now_minute
-        observed = actual_by_minute.get(minute_time)
+        total_message_count = 0
+        row: dict[str, str] = {"minute_time": minute_time.isoformat()}
 
-        if observed is None and state.last_minute is None and latest_actual_minute is not None:
-            minute_time = latest_actual_minute
-            observed = actual_by_minute.get(minute_time)
+        for sym in SYMBOLS:
+            state = _csv_state_by_symbol.setdefault(sym, CsvSymbolState())
+            observed = actual_rows_by_symbol.get(sym, {}).get(minute_time)
 
-        if observed is not None:
-            sentiment_index = _to_float(observed["sentiment_index"], 0.0)
-            total_engagement = _to_float(observed["total_engagement"], 0.0)
-            avg_confidence = _to_float(observed["avg_confidence"], state.last_avg_confidence)
-            message_count = _to_int(observed["message_count"], 0)
-            is_observed = True
-        else:
-            if not state.sentiment_history:
-                continue
-            sentiment_index = _ema_from_recent(list(state.sentiment_history), EMA_LOOKBACK)
-            total_engagement = 0.0
-            avg_confidence = state.last_avg_confidence
-            message_count = 0
-            is_observed = False
+            # First-ever row for this symbol — seed from the latest available actual minute.
+            if observed is None and state.last_minute is None:
+                latest_by_sym = actual_rows_by_symbol.get(sym, {})
+                if latest_by_sym:
+                    latest_minute = max(latest_by_sym.keys())
+                    observed = latest_by_sym.get(latest_minute)
 
-        rows_to_write.append(
-            {
-                "minute_time": minute_time.isoformat(),
-                "symbol": symbol,
-                "sentiment_index": f"{sentiment_index:.6f}",
-                "total_engagement": f"{total_engagement:.6f}",
-                "avg_confidence": f"{avg_confidence:.6f}",
-                "message_count": str(message_count),
-                "is_observed": "true" if is_observed else "false",
-            }
-        )
+            if observed is not None:
+                sentiment_index = _to_float(observed["sentiment_index"], 0.0)
+                avg_confidence = _to_float(observed["avg_confidence"], state.last_avg_confidence)
+                message_count = _to_int(observed["message_count"], 0)
+            else:
+                # EMA fill — no real data for this (symbol, minute) pair.
+                if not state.sentiment_history:
+                    sentiment_index = 0.0
+                else:
+                    sentiment_index = _ema_from_recent(list(state.sentiment_history), EMA_LOOKBACK)
+                avg_confidence = state.last_avg_confidence
+                message_count = 0
 
-        state.sentiment_history.append(sentiment_index)
-        state.last_avg_confidence = avg_confidence
-        state.last_minute = minute_time
+            row[f"{sym}_sentiment_index"] = f"{sentiment_index:.6f}"
+            total_message_count += message_count
+
+            # Advance per-symbol EMA state.
+            state.sentiment_history.append(sentiment_index)
+            state.last_avg_confidence = avg_confidence
+            state.last_minute = minute_time
+
+        row["total_message_count"] = str(total_message_count)
+        rows_to_write.append(row)
 
     return rows_to_write
 
@@ -312,35 +335,43 @@ def _upsert_gold_delta(df) -> None:
 
 
 def _build_fallback_delta_df(batch_df, rows_to_write: list[dict[str, str]]):
+    """Build Delta rows for minutes where ALL symbols were EMA-filled (no real data).
+
+    A CSV row is "fully fallback" when total_message_count == 0.
+    The Delta table itself stays long-format (one Delta row per symbol), so we
+    expand each wide CSV row back into N symbol rows here.
+    """
     fallback_rows: list[Row] = []
     for row in rows_to_write:
-        if row.get("is_observed") != "false":
-            continue
+        if _to_int(row.get("total_message_count"), -1) != 0:
+            continue  # at least one symbol had real data – already upserted above
 
         try:
             minute_start = datetime.fromisoformat(str(row["minute_time"]))
         except (TypeError, ValueError, KeyError):
             continue
 
-        fallback_rows.append(
-            Row(
-                window=Row(
-                    start=minute_start,
-                    end=minute_start + timedelta(minutes=1),
-                ),
-                symbol=str(row.get("symbol", "")).strip(),
-                sentiment_index=_to_float(row.get("sentiment_index"), 0.0),
-                total_engagement=_to_float(row.get("total_engagement"), 0.0),
-                avg_confidence=_to_float(row.get("avg_confidence"), 0.0),
-                message_count=_to_int(row.get("message_count"), 0),
+        for sym in SYMBOLS:
+            sentiment_index = _to_float(row.get(f"{sym}_sentiment_index"), 0.0)
+            fallback_rows.append(
+                Row(
+                    window=Row(
+                        start=minute_start,
+                        end=minute_start + timedelta(minutes=1),
+                    ),
+                    symbol=sym,
+                    sentiment_index=sentiment_index,
+                    total_engagement=0.0,
+                    avg_confidence=0.0,
+                    message_count=0,
+                )
             )
-        )
 
     if not fallback_rows:
         return None
 
-    # Build from local rows and cast to the streaming schema to avoid python-side
-    # type mismatches (for example float values for LongType fields).
+    # Build from local rows and cast to the streaming schema to avoid Python-side
+    # type mismatches (e.g. float values for LongType fields).
     fallback_df = batch_df.sparkSession.createDataFrame(fallback_rows)
     cast_columns = [
         F.col(field.name).cast(field.dataType).alias(field.name)
@@ -370,7 +401,9 @@ def process_gold_batch(batch_df, epoch_id: int) -> None:
 
     fallback_delta_df = _build_fallback_delta_df(batch_df, rows_to_write)
     _upsert_gold_delta(fallback_delta_df)
-    fallback_groups = sum(1 for row in rows_to_write if row.get("is_observed") == "false")
+    fallback_groups = sum(
+        1 for row in rows_to_write if _to_int(row.get("total_message_count"), -1) == 0
+    )
 
     logger.info(
         "Gold epoch=%s input_rows=%d observed_groups=%d fallback_groups=%d csv_rows=%d csv_path=%s",
