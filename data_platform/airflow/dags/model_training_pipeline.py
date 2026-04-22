@@ -25,7 +25,7 @@ def feature_engineering_task_wrapper():
 with DAG(
     dag_id="model_training_pipeline",
     start_date=datetime(2024, 1, 1),
-    schedule="@daily",
+    schedule=timedelta(minutes=20),
     catchup=False
 ) as dag:
 

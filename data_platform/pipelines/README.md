@@ -18,7 +18,8 @@ This package contains the data movement and transformation layer for CryptoQuant
 2. Raw data is normalized into Bronze.
 3. Bronze is cleaned into Silver.
 4. Silver is transformed into Gold features.
-5. Delta writers persist each layer with the configured partitioning and checkpoint locations.
+5. Prediction jobs read Gold features, score them with the registered model, and persist outputs to Delta.
+6. Delta writers persist each layer with the configured partitioning and checkpoint locations.
 
 ## Future direction
 

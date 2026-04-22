@@ -1,6 +1,6 @@
 # configs/mlflow.yaml
 
 tracking_uri: http://mlflow:5000
-experiment_name: cryptoquant
+experiment_name: cryptoquant-models
 model_name: crypto-return-predictor
 local_tracking_uri: http://localhost:5000

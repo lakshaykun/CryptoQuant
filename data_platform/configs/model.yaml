@@ -89,25 +89,16 @@ train_data_path: "models/artifacts/train_data.parquet"
 
 model_params:
     xgboost:
-        n_estimators: 300        # ↓ reduce
+        n_estimators: 100        # ↓ reduce
         max_depth: 5
         learning_rate: 0.05
         subsample: 0.8
         colsample_bytree: 0.8
         n_jobs: 1
         random_state: 42
-    
-    random_forest:
-        n_estimators: 50
-        max_depth: 10
-        min_samples_split: 10
-        min_samples_leaf: 5
-        max_features: "sqrt"
-        n_jobs: 1
-        random_state: 42
 
     catboost:
-        iterations: 200          # ↓ reduce
+        iterations: 100          # ↓ reduce
         learning_rate: 0.05
         depth: 6
         loss_function: RMSE
@@ -115,16 +106,10 @@ model_params:
         random_state: 42
 
     lightgbm:
-        n_estimators: 300        # ↓ reduce
+        n_estimators: 100        # ↓ reduce
         learning_rate: 0.05
         num_leaves: 31
         n_jobs: 1
         random_state: 42
 
-    svr:
-        kernel: rbf
-        C: 0.5                  # ↓ safer
-        gamma: 0.1
-        epsilon: 0.01
-
-model_name: "model_xgboost"
+model_name: "crypto-return-predictor"

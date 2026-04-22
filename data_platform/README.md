@@ -20,7 +20,8 @@ CryptoQuant is a crypto market MLOps workspace for Binance market data. It inges
 3. [pipelines/transformers](pipelines/transformers/) cleans and standardizes the data into Silver.
 4. [pipelines/transformers/gold](pipelines/transformers/gold/) builds model-ready features.
 5. [models/](models/) trains, evaluates, and saves local artifacts.
-6. [api/](api/) loads the saved model for online prediction.
+6. [pipelines/jobs/batch](pipelines/jobs/batch/) and [pipelines/jobs/streaming](pipelines/jobs/streaming/) persist model predictions into Delta.
+7. [api/](api/) loads the saved model for online prediction.
 
 ## Run locally
 

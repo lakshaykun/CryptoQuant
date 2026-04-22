@@ -3,7 +3,6 @@
 from datetime import datetime
 from pyspark.sql import SparkSession
 from pipelines.storage.delta.reader import (
-    check_table_exists,
     get_last_processed_time_symbols,
 )
 from utils_global.logger import get_logger
@@ -27,17 +26,14 @@ def main():
         state_date = datetime.fromisoformat(state_date_value)
         interval = config.get("interval")
 
-        if check_table_exists(spark, "market_state"):
-            last_open_time_symbols = get_last_processed_time_symbols(
-                spark,
-                "market_state",
-                symbols,
-                state_date,
-            )
-            logger.info("Loaded ingestion checkpoint from market_state")
-        else:
-            last_open_time_symbols = {symbol: state_date for symbol in symbols}
-            logger.info("market_state missing, bootstrapped checkpoint from config state_date")
+        last_open_time_symbols = get_last_processed_time_symbols(
+            spark,
+            "market_state",
+            symbols,
+            state_date,
+        )
+
+        logger.info("Loaded ingestion checkpoint for raw fetch")
 
         base_path = config.get("raw_data_path").get("market")
 

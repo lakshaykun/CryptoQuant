@@ -3,10 +3,8 @@
 from sklearn.preprocessing import StandardScaler
 from models.evaluation.evaluate import evaluate_model
 import xgboost as xgb
-from sklearn.ensemble import RandomForestRegressor
 from catboost import CatBoostRegressor
 import lightgbm as lgb
-from sklearn.svm import SVR
 import pandas as pd
 from models.registry.mlflow_registery import (
     log_scaler, start_run, log_params, log_metrics, log_model, register_model
@@ -30,11 +28,6 @@ class Trainer:
                 params_config=params
             ),
             ModelInfo(
-                name="random_forest",
-                train_func=self._train_random_forest,
-                params_config=params
-            ),
-            ModelInfo(
                 name="catboost",
                 train_func=self._train_catboost,
                 params_config=params
@@ -42,11 +35,6 @@ class Trainer:
             ModelInfo(
                 name="lightgbm",
                 train_func=self._train_lightgbm,
-                params_config=params
-            ),
-            ModelInfo(
-                name="svr",
-                train_func=self._train_svr,
                 params_config=params
             )
         ]
@@ -101,11 +89,6 @@ class Trainer:
         model.fit(X_train, y_train, eval_set=[(X_test, y_test)], verbose=False)
         return model
     
-    def _train_random_forest(self, X_train, y_train, X_test, y_test, params):
-        model = RandomForestRegressor(**params)
-        model.fit(X_train, y_train)
-        return model
-    
     def _train_catboost(self, X_train, y_train, X_test, y_test, params):
         model = CatBoostRegressor(**params, allow_writing_files=False)
         model.fit(X_train, y_train, eval_set=(X_test, y_test), use_best_model=True, early_stopping_rounds=50,)
@@ -119,9 +102,4 @@ class Trainer:
             eval_set=[(X_test, y_test)], 
             callbacks=[lgb.early_stopping(stopping_rounds=50), lgb.log_evaluation(period=0)]
         )
-        return model
-    
-    def _train_svr(self, X_train, y_train, X_test, y_test, params):
-        model = SVR(**params)
-        model.fit(X_train, y_train)
         return model

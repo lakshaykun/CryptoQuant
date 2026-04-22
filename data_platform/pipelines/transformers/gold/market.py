@@ -124,7 +124,7 @@ class GoldMarketTransformer:
         # get minimum open_time in the batch
         min_open_time = df.select(F.min("open_time")).first()[0]
 
-        min_fetch_time = min_open_time - timedelta(minutes=30)
+        min_fetch_time = min_open_time - timedelta(minutes=21)  # 20 minutes for ma_20 + 1 minute buffer
 
         # Load historical silver
         historical_df = read_incremental(

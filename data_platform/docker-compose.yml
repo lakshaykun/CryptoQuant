@@ -6,9 +6,11 @@ x-spark-base: &spark-base
   environment:
     - PYTHONPATH=/opt/app
     - PATH=/opt/spark/bin:$PATH
+    - MLFLOW_TRACKING_URI=http://mlflow:5000
   volumes:
     - .:/opt/app
     - spark-ivy:/root/.ivy2
+    - mlflow-data:/mlflow
 
 services:
   # =========================
@@ -32,6 +34,8 @@ services:
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+
+      KAFKA_HEAP_OPTS: "-Xmx256M -Xms256M"
 
       KAFKA_LOG_DIRS: /var/lib/kafka/data
 
@@ -92,13 +96,33 @@ services:
     working_dir: /opt/app
     command: >
       spark-submit
-      --master local[*]
+      --master local[2]
       --packages io.delta:delta-spark_2.12:3.0.0,org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0
       --conf spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension
       --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog
       /opt/app/pipelines/jobs/streaming/spark_streaming.py
     depends_on:
       - stream-producer
+    restart: always
+
+  spark-predictions:
+    <<: *spark-base
+    container_name: spark-predictions
+    working_dir: /opt/app
+    command: >
+      spark-submit
+      --master local[2]
+      --driver-memory 1g
+      --executor-memory 1g
+      --conf spark.executor.cores=1
+      --conf spark.driver.maxResultSize=512m
+      --packages io.delta:delta-spark_2.12:3.0.0
+      --conf spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension
+      --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog
+      /opt/app/pipelines/jobs/streaming/spark_predictions.py
+    depends_on:
+      - spark-streaming
+      - mlflow
     restart: always
   
   spark:
@@ -119,6 +143,7 @@ services:
       POSTGRES_USER: airflow
       POSTGRES_PASSWORD: airflow
       POSTGRES_DB: airflow
+      POSTGRES_SHARED_BUFFERS: 64MB
     ports:
       - "5433:5432"
     volumes:
@@ -163,6 +188,9 @@ services:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
       - AIRFLOW__CORE__DAGS_FOLDER=/opt/app/airflow/dags
+      - AIRFLOW__CORE__PARALLELISM=4
+      - AIRFLOW__CORE__DAG_CONCURRENCY=2
+      - AIRFLOW__SCHEDULER__MAX_THREADS=2
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
       - PYTHONPATH=/opt/app
     volumes:
@@ -184,8 +212,9 @@ services:
       - MLFLOW_SERVER_ALLOWED_HOSTS=*
     command: >
       mlflow server
-      --backend-store-uri sqlite:///mlflow.db
-      --default-artifact-root /mlflow/artifacts
+      --backend-store-uri sqlite:////mlflow/mlflow.db
+      --serve-artifacts
+      --artifacts-destination /mlflow/artifacts
       --host 0.0.0.0
       --port 5000
     volumes:

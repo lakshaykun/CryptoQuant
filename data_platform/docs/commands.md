@@ -36,7 +36,7 @@ docker exec -it crypto-kafka /opt/kafka/bin/kafka-console-consumer.sh \
 clear
 docker compose down
 docker compose build
-docker compose up --build -d
+docker compose up -d
 docker ps -a
 ```
 

@@ -5,7 +5,7 @@ from airflow.operators.bash import BashOperator
 from airflow.operators.python import PythonOperator
 from datetime import datetime, timedelta
 from pipelines.jobs.batch.cleanup_raw import cleanup_task
-
+from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 
 def build_spark_submit(task_script):
     return f"""
@@ -66,6 +66,11 @@ with DAG(
         python_callable=cleanup_task,
     )
 
+    trigger_predictions = TriggerDagRunOperator(
+        task_id="trigger_predictions",
+        trigger_dag_id="batch_predictions_pipeline"
+    )
+
     ingest_historical >> bronze
     ingest_today >> bronze
-    bronze >> silver >> gold >> cleanup
+    bronze >> silver >> gold >> cleanup >> trigger_predictions
