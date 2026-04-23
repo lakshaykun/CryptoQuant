@@ -10,7 +10,7 @@ from monitoring_callbacks import dag_failure_callback, dag_success_callback
 
 def build_spark_submit(task_script):
     return f"""
-    docker exec spark spark-submit \
+    docker exec data_platform-spark-1 spark-submit \
       --master local[*] \
       --packages io.delta:delta-spark_2.12:3.0.0 \
       --conf spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension \
@@ -32,6 +32,7 @@ with DAG(
         bash_command=build_spark_submit(
             "pipelines/jobs/batch/ingest.py"
         ),
+        retries=1,
     )
 
     ingest_today = BashOperator(
@@ -48,6 +49,8 @@ with DAG(
         bash_command=build_spark_submit(
             "pipelines/jobs/batch/bronze.py"
         ),
+        retries=1,
+        retry_delay=timedelta(seconds=10),
     )
 
     silver = BashOperator(
@@ -55,6 +58,8 @@ with DAG(
         bash_command=build_spark_submit(
             "pipelines/jobs/batch/silver.py"
         ),
+        retries=1,
+        retry_delay=timedelta(seconds=10),
     )
 
     gold = BashOperator(
@@ -62,11 +67,15 @@ with DAG(
         bash_command=build_spark_submit(
             "pipelines/jobs/batch/gold.py"
         ),
+        retries=1,
+        retry_delay=timedelta(seconds=10),
     )
 
     cleanup = PythonOperator(
         task_id="cleanup",
         python_callable=cleanup_task,
+        retries=1,
+        retry_delay=timedelta(seconds=10),
     )
 
     trigger_predictions = TriggerDagRunOperator(

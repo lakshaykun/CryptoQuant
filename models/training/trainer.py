@@ -7,7 +7,13 @@ from catboost import CatBoostRegressor
 import lightgbm as lgb
 import pandas as pd
 from models.registry.mlflow_registery import (
-    log_scaler, start_run, log_params, log_metrics, log_model, register_model
+    log_dataframe,
+    log_scaler,
+    start_run,
+    log_params,
+    log_metrics,
+    log_model,
+    register_model,
 )
 
 class ModelInfo:
@@ -53,6 +59,7 @@ class Trainer:
         best_score = float("inf")
         best_run_id = None
         best_model_name = None
+        best_report = None
 
         for model_info in self.models:
             self.logger.info(f"Training {model_info.name} with params: {model_info.params}")
@@ -65,22 +72,32 @@ class Trainer:
 
                     model = model_info.train_func(X_train, y_train, X_test, y_test, model_info.params)
 
-                    results = evaluate_model(model, X_test, y_test)
+                    results, report = evaluate_model(model, X_test, y_test)
 
                     log_metrics(results)
+                    log_dataframe(report, f"{model_info.name}_backtest.csv")
 
-                    score = results["rmse"]
+                    score = results["win_rate"]
 
                     if score < best_score:
                         best_score = score
                         best_run_id = run.info.run_id
                         best_model_name = model_info.name
+                        best_report = report
 
                     log_model(model, model_info.name, "v1")
             except:
                 self.logger.error(f"Error training {model_info.name}", exc_info=True)
         
-        log_scaler(scaler)
+        if best_run_id is None or best_model_name is None:
+            raise RuntimeError("No trained model completed successfully, nothing to register in MLflow")
+
+        with start_run(run_id=best_run_id):
+            log_scaler(scaler)
+
+            if best_report is not None:
+                log_dataframe(best_report, f"best_{best_model_name}_backtest.csv", artifact_path="best_model")
+
         register_model(best_run_id, best_model_name)
 
     # Training functions for each model type

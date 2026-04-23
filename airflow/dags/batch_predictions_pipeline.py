@@ -6,7 +6,7 @@ from monitoring_callbacks import dag_failure_callback, dag_success_callback
 
 def build_spark_submit(task_script):
     return f"""
-    docker exec spark spark-submit \
+    docker exec data_platform-spark-1 spark-submit \
       --master local[*] \
       --packages io.delta:delta-spark_2.12:3.0.0 \
       --conf spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension \

@@ -149,6 +149,8 @@ def plot_predicted_vs_actual(frame: pd.DataFrame) -> go.Figure:
 
 
 def plot_close_price_comparison(frame: pd.DataFrame) -> go.Figure:
+    close_values = pd.concat([frame["actual_close"], frame["predicted_close"]], ignore_index=True).dropna()
+
     fig = go.Figure()
     fig.add_trace(
         go.Scatter(
@@ -174,7 +176,21 @@ def plot_close_price_comparison(frame: pd.DataFrame) -> go.Figure:
             hovertemplate="%{x|%Y-%m-%d %H:%M}<br>Predicted close: %{y:.4f}<extra></extra>",
         )
     )
-    return apply_plot_style(fig, "Time", "Close price (USDT)")
+    fig = apply_plot_style(fig, "Time", "Close price (USDT)")
+
+    if not close_values.empty:
+        lower_bound = float(close_values.quantile(0.02))
+        upper_bound = float(close_values.quantile(0.98))
+
+        if lower_bound == upper_bound:
+            lower_bound = float(close_values.min())
+            upper_bound = float(close_values.max())
+
+        spread = upper_bound - lower_bound
+        padding = max(spread * 0.12, max(abs(upper_bound), abs(lower_bound)) * 0.01, 1e-6)
+        fig.update_yaxes(range=[lower_bound - padding, upper_bound + padding])
+
+    return fig
 
 
 def plot_residuals(frame: pd.DataFrame) -> go.Figure:
