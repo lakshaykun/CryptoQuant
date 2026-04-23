@@ -30,13 +30,13 @@ jobs:
       - name: Pull images
         run: |
           cd /home/shinigami/coding/git/CryptoQuant
-          docker compose pull
+          docker compose -p data_platform pull
 
       # 🔁 Recreate containers safely
       - name: Deploy containers
         run: |
           cd /home/shinigami/coding/git/CryptoQuant
-          docker compose up -d --force-recreate
+          docker compose up -p data_platform -d --force-recreate
 
       # ❤️ API health check (retry)
       - name: Check API
@@ -60,6 +60,6 @@ jobs:
       - name: Trigger training DAG
         run: |
           curl -X POST "http://localhost:8080/api/v1/dags/model_training_pipeline/dagRuns" \
-          -u "admin:admin" \
+          -u "airflow:airflow" \
           -H "Content-Type: application/json" \
           -d '{}'
