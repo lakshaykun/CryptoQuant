@@ -36,7 +36,7 @@ jobs:
       - name: Deploy containers
         run: |
           cd /home/shinigami/coding/git/CryptoQuant
-          docker compose up -p data_platform -d --force-recreate
+          docker compose -p data_platform up -d --force-recreate
 
       # ❤️ API health check (retry)
       - name: Check API
