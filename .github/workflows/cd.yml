@@ -57,9 +57,9 @@ jobs:
           exit 1
 
       # 🚀 Trigger training DAG
-      - name: Trigger training DAG
+      - name: Trigger Data DAG
         run: |
-          curl -X POST "http://localhost:8080/api/v1/dags/model_training_pipeline/dagRuns" \
+          curl -X POST "http://localhost:8080/api/v1/dags/batch_data_pipeline/dagRuns" \
           -u "airflow:airflow" \
           -H "Content-Type: application/json" \
           -d '{}'
