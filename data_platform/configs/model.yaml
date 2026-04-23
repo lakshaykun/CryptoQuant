@@ -117,10 +117,10 @@ model_name: "crypto-return-predictor"
 monitoring:
     drift:
         recent_window: 5000
-        baseline_window: 20000
+        baseline_window: 200000
         min_rows: 200
-        psi_bins: 10
-        data_drift_threshold: 0.20
+        psi_bins: 5
+        data_drift_threshold: 0.25
         prediction_drift_threshold: 0.25
         rmse_increase_threshold: 0.15
 
@@ -133,7 +133,7 @@ monitoring:
         state_path: "/opt/app/delta/state/monitoring/retraining_state.json"
 
     scheduler:
-        interval_minutes: 5
+        interval_minutes: 1
 
     metrics:
         namespace: "cryptoquant"
