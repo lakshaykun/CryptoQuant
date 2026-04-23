@@ -17,7 +17,6 @@ services:
   # =========================
   kafka:
     image: apache/kafka:3.7.0
-    container_name: kafka
     ports:
       - "9092:9092"
     volumes:
@@ -44,7 +43,6 @@ services:
 
   topic-init:
     image: apache/kafka:3.7.0
-    container_name: kafka-topic-init
     depends_on:
       - kafka
     command: |
@@ -72,7 +70,6 @@ services:
 
   kafka-exporter:
     image: danielqsj/kafka-exporter:v1.8.0
-    container_name: kafka-exporter
     depends_on:
       - kafka
     command:
@@ -86,7 +83,6 @@ services:
   # =========================
   stream-producer:
     image: lakshaykun/stream-producer:latest
-    container_name: stream-producer
     command: python pipelines/ingestion/streaming/jobs/crypto_stream_job.py
     restart: always
     depends_on:
@@ -97,7 +93,6 @@ services:
 
   dashboard:
     image: lakshaykun/crypto-dashboard:latest
-    container_name: crypto-dashboard
     working_dir: /opt/app
     depends_on:
       - mlflow
@@ -118,7 +113,6 @@ services:
 
   api:
     image: lakshaykun/crypto-api:latest
-    container_name: crypto-api
     working_dir: /opt/app
     command: uvicorn api.app:app --host 0.0.0.0 --port 8000 --reload
     restart: unless-stopped
@@ -137,7 +131,6 @@ services:
   # =========================
   spark-streaming:
     <<: *spark-base
-    container_name: spark-streaming
     working_dir: /opt/app
     command: >
       spark-submit
@@ -157,7 +150,6 @@ services:
 
   spark-predictions:
     <<: *spark-base
-    container_name: spark-predictions
     working_dir: /opt/app
     command: >
       spark-submit
@@ -182,7 +174,6 @@ services:
   
   spark:
     <<: *spark-base
-    container_name: spark
     user: "0:0"
     working_dir: /opt/app
     command: tail -f /dev/null
@@ -193,7 +184,6 @@ services:
   # =========================
   postgres:
     image: postgres:15
-    container_name: airflow-postgres
     environment:
       POSTGRES_USER: airflow
       POSTGRES_PASSWORD: airflow
@@ -207,7 +197,6 @@ services:
   airflow-webserver:
     build:
       dockerfile: docker/airflow/Dockerfile
-    container_name: airflow-webserver
     working_dir: /opt/app
     user: "0:0"
     depends_on:
@@ -239,7 +228,6 @@ services:
   airflow-scheduler:
     build:
       dockerfile: docker/airflow/Dockerfile
-    container_name: airflow-scheduler
     working_dir: /opt/app
     user: "0:0"
     depends_on:
@@ -272,7 +260,6 @@ services:
   # =========================
   mlflow:
     image: ghcr.io/mlflow/mlflow:latest
-    container_name: mlflow
     ports:
       - "5000:5000"
     environment:
@@ -289,20 +276,17 @@ services:
 
   airflow-statsd-exporter:
     image: prom/statsd-exporter:v0.26.1
-    container_name: airflow-statsd-exporter
     ports:
       - "9102:9102"
       - "9125:9125/udp"
 
   pushgateway:
     image: prom/pushgateway:v1.8.0
-    container_name: pushgateway
     ports:
       - "9091:9091"
 
   node-exporter:
     image: prom/node-exporter:v1.8.1
-    container_name: node-exporter
     command:
       - "--path.rootfs=/host"
     volumes:
@@ -312,7 +296,6 @@ services:
 
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:v0.49.1
-    container_name: cadvisor
     privileged: true
     devices:
       - /dev/kmsg
@@ -326,7 +309,6 @@ services:
 
   prometheus:
     image: prom/prometheus:v2.53.0
-    container_name: prometheus
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
       - "--web.enable-lifecycle"
