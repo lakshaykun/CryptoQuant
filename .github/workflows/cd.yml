@@ -15,11 +15,11 @@ jobs:
 
     steps:
       - name: Go to project
-        run: cd ~/cryptoquant
+        run: cd /home/shinigami/coding/git/CryptoQuant
 
       - name: Pull latest code
         run: |
-          cd ~/cryptoquant
+          cd /home/shinigami/coding/git/CryptoQuant
           git pull origin main
 
       # IMPORTANT
@@ -29,13 +29,13 @@ jobs:
       # Pull new images
       - name: Pull images
         run: |
-          cd ~/cryptoquant
+          cd /home/shinigami/coding/git/CryptoQuant
           docker compose pull
 
       # FORCE recreate containers
       - name: Deploy containers
         run: |
-          cd ~/cryptoquant
+          cd /home/shinigami/coding/git/CryptoQuant
           docker compose up -d --force-recreate
 
       # Health check (retry)
