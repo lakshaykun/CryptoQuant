@@ -7,7 +7,6 @@ from charts import (
     plot_close_price_comparison,
     plot_drift_scores,
     plot_ingestion_rate,
-    plot_predicted_vs_actual,
     plot_residuals,
     plot_rolling_rmse,
     plot_row_count_trend,
@@ -258,11 +257,7 @@ def render_model_behavior(predictions_frame) -> None:
         st.info("No prediction rows with actual comparisons are available for this time window.")
         return
 
-    comparison_col_1, comparison_col_2 = st.columns(2)
-    with comparison_col_1:
-        st.plotly_chart(plot_predicted_vs_actual(predictions_frame), width="stretch", theme=None)
-    with comparison_col_2:
-        st.plotly_chart(plot_close_price_comparison(predictions_frame), width="stretch", theme=None)
+    st.plotly_chart(plot_close_price_comparison(predictions_frame), width="stretch", theme=None)
 
     error_col_1, error_col_2 = st.columns(2)
     with error_col_1:

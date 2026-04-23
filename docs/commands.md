@@ -40,6 +40,8 @@ docker compose up -d
 docker ps -a
 ```
 
+docker compose -p data_platform up --build -d
+
 http://localhost:8080 - airflow / airflow
 
 

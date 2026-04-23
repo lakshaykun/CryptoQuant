@@ -77,7 +77,7 @@ class Trainer:
                     log_metrics(results)
                     log_dataframe(report, f"{model_info.name}_backtest.csv")
 
-                    score = results["win_rate"]
+                    score = results["directional_accuracy"]
 
                     if score < best_score:
                         best_score = score

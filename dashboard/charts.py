@@ -119,35 +119,6 @@ def plot_row_count_trend(layer_frame: pd.DataFrame, time_col: str) -> go.Figure:
     return apply_plot_style(fig, "Time", "Rows")
 
 
-def plot_predicted_vs_actual(frame: pd.DataFrame) -> go.Figure:
-    fig = go.Figure()
-    fig.add_trace(
-        go.Scatter(
-            x=frame["open_time"],
-            y=frame["prediction"],
-            mode="lines",
-            line=dict(color=COLORS["primary"], width=2.7),
-            fill="tozeroy",
-            fillcolor=_rgba(COLORS["primary"], 0.12),
-            line_shape="spline",
-            name="Prediction",
-            hovertemplate="%{x|%Y-%m-%d %H:%M}<br>Prediction: %{y:.6f}<extra></extra>",
-        )
-    )
-    fig.add_trace(
-        go.Scatter(
-            x=frame["open_time"],
-            y=frame["actual_log_return_lead1"],
-            mode="lines",
-            line=dict(color=COLORS["secondary"], width=2.2, dash="dash"),
-            line_shape="spline",
-            name="Actual",
-            hovertemplate="%{x|%Y-%m-%d %H:%M}<br>Actual: %{y:.6f}<extra></extra>",
-        )
-    )
-    return apply_plot_style(fig, "Time", "Log return")
-
-
 def plot_close_price_comparison(frame: pd.DataFrame) -> go.Figure:
     close_values = pd.concat([frame["actual_close"], frame["predicted_close"]], ignore_index=True).dropna()
 
