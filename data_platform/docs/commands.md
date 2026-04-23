@@ -79,6 +79,6 @@ pip install -r dashboard/requirements.txt
 
 
 ### Run dashboard
-streamlit run dashboard/app.py
+conda activate crypto && streamlit run dashboard/app.py
 
 http://localhost:8501

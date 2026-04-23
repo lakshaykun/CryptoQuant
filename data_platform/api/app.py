@@ -33,7 +33,7 @@ PREDICTION_ERROR = Histogram(
     buckets=(0.001, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 1.0),
 )
 PREDICTION_ERROR_COUNT = Counter(
-    "cryptoquant_api_prediction_error_count_total",
+    "cryptoquant_api_prediction_error_observations_total",
     "Number of prediction error observations.",
 )
 PREDICTION_MAE_LAST = Gauge(

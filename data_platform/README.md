@@ -22,12 +22,14 @@ CryptoQuant is a crypto market MLOps workspace for Binance market data. It inges
 5. [models/](models/) trains, evaluates, and saves local artifacts.
 6. [pipelines/jobs/batch](pipelines/jobs/batch/) and [pipelines/jobs/streaming](pipelines/jobs/streaming/) persist model predictions into Delta.
 7. [api/](api/) loads the saved model for online prediction.
+8. [dashboard/](dashboard/) renders the Streamlit observability UI.
 
 ## Run locally
 
 - Batch pipeline: `python scripts/run_batch.py`
 - Prediction API: `./scripts/run_api.sh`
 - Streamlit dashboard: `streamlit run dashboard/app.py`
+- Containerized dashboard: `docker compose up dashboard`
 
 ## Documentation
 
@@ -37,6 +39,25 @@ CryptoQuant is a crypto market MLOps workspace for Binance market data. It inges
 - [API](api/README.md)
 - [Models](models/README.md)
 - [Dashboard](dashboard/README.md)
+- [Dashboard](dashboard/README.md)
+
+## Containerized dashboard
+
+The dashboard now has a dedicated Docker image for CI/CD and compose-based deployment.
+
+Build it directly with:
+
+```bash
+docker build -f docker/dashboard/Dockerfile -t cryptoquant-dashboard .
+```
+
+Run it with the stack:
+
+```bash
+docker compose up dashboard
+```
+
+The container exposes Streamlit on port `8501` and connects to Prometheus and MLflow through the compose network.
 
 ## Design goals
 

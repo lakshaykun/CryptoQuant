@@ -111,8 +111,16 @@ def apply_app_styles() -> None:
         }
 
         .block-container {
+            max-width: 1500px;
             padding-top: 1.2rem;
             padding-bottom: 2rem;
+            padding-left: 1.6rem;
+            padding-right: 1.6rem;
+        }
+
+        div[data-testid="stHorizontalBlock"] {
+            gap: 1rem;
+            align-items: stretch;
         }
 
         h1, h2, h3, h4, h5, h6, p, span, label, li {
@@ -252,6 +260,10 @@ def apply_app_styles() -> None:
             border: 1px solid var(--dashboard-border);
             border-radius: 16px;
             overflow: hidden;
+        }
+
+        div[data-testid="stDataFrame"] {
+            padding: 0.15rem;
         }
 
         div[data-testid="stDataFrame"] * {

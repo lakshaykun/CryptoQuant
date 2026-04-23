@@ -14,11 +14,12 @@ mlflow.set_tracking_uri(mlflow_tracking_uri)
 mlflow.set_registry_uri(mlflow_tracking_uri)
 
 @lru_cache(maxsize=1)
-def load_model(model_name=None):
+def load_model(logger, model_name=None):
     """
     Load the latest registered MLflow model version.
 
     Args:
+        logger: The logger instance.
         model_name (str | None): The registered model name to load.
     Returns:
         The loaded model.
@@ -30,6 +31,9 @@ def load_model(model_name=None):
         latest_versions = client.search_model_versions(f"name='{registered_model_name}'")
 
         if not latest_versions:
+            logger.error(
+                f"No registered versions found for model '{registered_model_name}' in MLflow registry at '{mlflow_tracking_uri}'"
+            )
             raise ValueError(
                 f"No registered versions found for model '{registered_model_name}'"
             )
@@ -52,9 +56,12 @@ def load_model(model_name=None):
                 else:
                     model_uri = f"models:/{registered_model_name}/{version.version}"
 
+                logger.info(
+                    f"Attempting to load model '{registered_model_name}' version {version.version} from '{model_uri}'"
+                )
                 return mlflow.pyfunc.load_model(model_uri)
             except Exception as exc:
-                load_errors.append(
+                logger.error(
                     f"version {version.version} from {version.source}: {exc}"
                 )
 

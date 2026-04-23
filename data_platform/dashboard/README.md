@@ -70,6 +70,12 @@ From repository root:
 streamlit run dashboard/app.py
 ```
 
+Containerized:
+
+```bash
+docker compose up dashboard
+```
+
 Open:
 
 - http://localhost:8501
@@ -77,6 +83,7 @@ Open:
 ## Notes
 
 - The dashboard resolves /opt/app paths to local project paths automatically for Docker/local compatibility.
+- The dashboard container is built from [docker/dashboard/Dockerfile](../docker/dashboard/Dockerfile) for CI/CD and compose use.
 - If Prometheus is unavailable, Prometheus-backed charts fail gracefully without crashing the app.
 - Delta tables and Prometheus responses are cached with short TTLs for responsive rendering.
 - The theme settings live in `.streamlit/config.toml` and must keep `chartSequentialColors` at 10 values for Streamlit compatibility.

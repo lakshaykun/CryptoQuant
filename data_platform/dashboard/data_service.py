@@ -7,7 +7,7 @@ import pandas as pd
 
 from delta_client import load_delta_table
 from helpers import to_utc_datetime
-
+import numpy as np
 
 def prepare_predictions_frame(
     frame: pd.DataFrame,
@@ -33,7 +33,7 @@ def prepare_predictions_frame(
     target_frame = target_frame[["symbol", "open_time", "actual_close", "actual_log_return_lead1"]]
 
     subset = subset.merge(target_frame, on=["symbol", "open_time"], how="left")
-    subset["predicted_close"] = subset["close"] * subset["prediction"]
+    subset["predicted_close"] = subset["close"] * np.exp(subset["prediction"])
     subset["close_residual"] = subset["predicted_close"] - subset["actual_close"]
     subset["residual"] = subset["prediction"] - subset["actual_log_return_lead1"]
 
