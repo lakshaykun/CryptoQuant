@@ -41,8 +41,8 @@ def _population_stability_index(expected: pd.Series, actual: pd.Series, bins: in
     expected_counts, _ = np.histogram(expected_values, bins=breakpoints)
     actual_counts, _ = np.histogram(actual_values, bins=breakpoints)
 
-    expected_dist = np.clip(expected_counts / max(expected_counts.sum(), 1), 1e-6, 1.0)
-    actual_dist = np.clip(actual_counts / max(actual_counts.sum(), 1), 1e-6, 1.0)
+    expected_dist = np.clip(expected_counts / max(expected_counts.sum(), 1), 1e-4, 1.0)
+    actual_dist = np.clip(actual_counts / max(actual_counts.sum(), 1), 1e-4, 1.0)
 
     psi = np.sum((actual_dist - expected_dist) * np.log(actual_dist / expected_dist))
     return float(max(psi, 0.0))
@@ -109,6 +109,13 @@ def _load_predictions_frame(columns: List[str]) -> pd.DataFrame:
     return table.to_pandas(columns=columns)
 
 
+def _clip_series(s: pd.Series) -> pd.Series:
+    if s.empty:
+        return s
+    lower = s.quantile(0.02)
+    upper = s.quantile(0.98)
+    return s.clip(lower=lower, upper=upper)
+    
 def _compute_data_drift(
     baseline_df: pd.DataFrame,
     recent_df: pd.DataFrame,
@@ -122,8 +129,8 @@ def _compute_data_drift(
         if feature not in baseline_df.columns or feature not in recent_df.columns:
             continue
 
-        baseline_series = _safe_numeric(baseline_df[feature])
-        recent_series = _safe_numeric(recent_df[feature])
+        baseline_series = _clip_series(_safe_numeric(baseline_df[feature]))
+        recent_series = _clip_series(_safe_numeric(recent_df[feature]))
 
         if baseline_series.size < cfg["min_rows"] or recent_series.size < cfg["min_rows"]:
             continue
@@ -141,7 +148,7 @@ def _compute_data_drift(
             bins=cfg["psi_bins"],
         )
 
-        score = (0.4 * psi) + (0.3 * mean_shift) + (0.3 * std_shift)
+        score = (0.7 * psi) + (0.15 * mean_shift) + (0.15 * std_shift)
 
         feature_scores.append(score)
         psi_values.append(psi)
@@ -224,14 +231,26 @@ def _compute_prediction_drift(predictions_df: pd.DataFrame, cfg: Dict) -> Dict:
         "drift_detected": drift_detected,
     }
 
+def _filter_drift_features(features: List[str]) -> List[str]:
+    exclude = {
+        "symbol",
+        "open_time",
+        "date",
+        "ingestion_time",
+        "is_valid_feature_row",
+        "open", "high", "low", "close",
+        "hour", "day_of_week",
+    }
 
+    return [f for f in features if f not in exclude]
 def evaluate_drift() -> Dict:
     resolved_cfg = _resolve_monitoring_config()
     model_cfg = resolved_cfg["model"]
     drift_cfg = resolved_cfg["drift"]
 
-    features = [feature for feature in model_cfg.get("features", []) if feature != "symbol"]
-
+    raw_features = model_cfg.get("features", [])
+    features = _filter_drift_features(raw_features)
+    
     training_path = model_cfg.get("train_data_path")
     if not training_path or not Path(training_path).exists():
         logger.warning(
