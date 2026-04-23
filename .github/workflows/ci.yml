@@ -13,11 +13,29 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # 🔍 Detect changed files (robust)
+      - name: Get changed files
+        id: changes
+        run: |
+          CHANGED=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }})
+
+          echo "api=$(echo "$CHANGED" | grep '^api/' || true)" >> $GITHUB_OUTPUT
+          echo "dashboard=$(echo "$CHANGED" | grep '^dashboard/' || true)" >> $GITHUB_OUTPUT
+          echo "stream=$(echo "$CHANGED" | grep '^pipelines/ingestion/streaming/' || true)" >> $GITHUB_OUTPUT
+          echo "spark=$(echo "$CHANGED" | grep '^docker/spark/' || true)" >> $GITHUB_OUTPUT
+
+      # 🔐 Login only if needed
       - name: Login to Docker Hub
+        if: |
+          steps.changes.outputs.api != '' ||
+          steps.changes.outputs.dashboard != '' ||
+          steps.changes.outputs.stream != '' ||
+          steps.changes.outputs.spark != ''
         run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
 
       # 🔹 API
       - name: Build & push API
+        if: steps.changes.outputs.api != ''
         run: |
           docker build -t ${{ secrets.DOCKER_USERNAME }}/crypto-api:latest \
                        -t ${{ secrets.DOCKER_USERNAME }}/crypto-api:${{ github.sha }} \
@@ -27,6 +45,7 @@ jobs:
 
       # 🔹 Dashboard
       - name: Build & push dashboard
+        if: steps.changes.outputs.dashboard != ''
         run: |
           docker build -t ${{ secrets.DOCKER_USERNAME }}/crypto-dashboard:latest \
                        -f docker/dashboard/Dockerfile .
@@ -34,6 +53,7 @@ jobs:
 
       # 🔹 Stream Producer
       - name: Build & push stream producer
+        if: steps.changes.outputs.stream != ''
         run: |
           docker build -t ${{ secrets.DOCKER_USERNAME }}/stream-producer:latest \
                        -f docker/stream_producer/Dockerfile .
@@ -41,6 +61,7 @@ jobs:
 
       # 🔹 Spark
       - name: Build & push spark
+        if: steps.changes.outputs.spark != ''
         run: |
           docker build -t ${{ secrets.DOCKER_USERNAME }}/crypto-spark:latest \
                        -f docker/spark/Dockerfile .

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import html
-
 import pandas as pd
 import streamlit as st
 
@@ -64,39 +62,6 @@ def _latest_row(frame: pd.DataFrame):
         return frame.sort_values(sort_columns).iloc[-1]
 
     return frame.iloc[-1]
-
-
-def render_hero_banner(filters, model_config, mlflow_config) -> None:
-    model_name = model_config.get("model_name", "crypto-return-predictor")
-    target_name = model_config.get("target", "log_return_lead1")
-    registry_model_name = mlflow_config.get("model_name", model_name)
-    tracking_uri = mlflow_config.get("tracking_uri", "N/A")
-
-    window_label = (
-        f"{filters['start'].strftime('%Y-%m-%d %H:%M')} → {filters['end'].strftime('%Y-%m-%d %H:%M')} UTC"
-    )
-
-    st.markdown(
-        f"""
-        <div class="hero-card">
-            <div class="hero-eyebrow">CryptoQuant MLOps Console</div>
-            <div class="hero-title">Dark, glassy observability for the {html.escape(filters['symbol'])} pipeline</div>
-            <p class="hero-copy">
-                Gold-table visibility, model quality, Prometheus health, and automatic retraining signals in one control surface.
-                MLflow registry: {html.escape(registry_model_name)}. Tracking URI: {html.escape(tracking_uri)}.
-            </p>
-            <div class="hero-meta">
-                <span class="hero-pill">Symbol: {html.escape(filters['symbol'])}</span>
-                <span class="hero-pill">Model: {html.escape(model_name)}</span>
-                <span class="hero-pill">Window: {html.escape(window_label)}</span>
-                <span class="hero-pill">Target: {html.escape(target_name)}</span>
-                <span class="hero-pill">Registry: {html.escape(registry_model_name)}</span>
-                <span class="hero-pill">Auto-refresh: {AUTO_REFRESH_SECONDS}s</span>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-        )
 
 
 def render_market_snapshot(gold_frame: pd.DataFrame) -> None:
@@ -207,11 +172,13 @@ def render_platform_snapshot(model_config, mlflow_config, gold_frame: pd.DataFra
         float(drift_cfg.get("prediction_drift_threshold", 0.25)),
     )
 
-    metric_cols = st.columns(4)
-    metric_cols[0].metric("Target", str(model_config.get("target", "log_return_lead1")))
-    metric_cols[1].metric("Features", str(feature_count))
-    metric_cols[2].metric("Drift threshold", f"{max_threshold:.2f}")
-    metric_cols[3].metric("Cooldown", f"{int(retraining_cfg.get('cooldown_minutes', 30))}m")
+    metric_row_1 = st.columns(2)
+    metric_row_1[0].metric("Target", str(model_config.get("target", "log_return_lead1")))
+    metric_row_1[1].metric("Features", str(feature_count))
+
+    metric_row_2 = st.columns(2)
+    metric_row_2[0].metric("Drift threshold", f"{max_threshold:.2f}")
+    metric_row_2[1].metric("Cooldown", f"{int(retraining_cfg.get('cooldown_minutes', 30))}m")
 
     st.caption(
         "Model registry: "
@@ -220,12 +187,9 @@ def render_platform_snapshot(model_config, mlflow_config, gold_frame: pd.DataFra
         f"Monitoring every {int(scheduler_cfg.get('interval_minutes', 5))} minute(s)"
     )
 
-    snapshot_col_1, snapshot_col_2 = st.columns([1.15, 0.95])
-    with snapshot_col_1:
-        render_market_snapshot(gold_frame)
-
-    with snapshot_col_2:
-        render_drift_posture(drift_frame)
+    render_market_snapshot(gold_frame)
+    st.divider()
+    render_drift_posture(drift_frame)
 
 
 def render_overview(gold_frame, predictions_frame, drift_frame, prometheus_url: str, refresh_nonce: int) -> None:
@@ -406,8 +370,6 @@ def render_dashboard_body(data_config, model_config, mlflow_config, filters, ref
     gold_frame = data["gold"]
     predictions_frame = data["predictions"]
     drift_frame = data["drift"]
-
-    render_hero_banner(filters=filters, model_config=model_config, mlflow_config=mlflow_config)
 
     st.divider()
     render_platform_snapshot(
