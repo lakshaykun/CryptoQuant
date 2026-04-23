@@ -1,0 +1,47 @@
+# .github/workflows/ci.yml
+
+name: CI - Build & Push Images
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to Docker Hub
+        run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+
+      # 🔹 API
+      - name: Build & push API
+        run: |
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/crypto-api:latest \
+                       -t ${{ secrets.DOCKER_USERNAME }}/crypto-api:${{ github.sha }} \
+                       -f docker/api/Dockerfile .
+          docker push ${{ secrets.DOCKER_USERNAME }}/crypto-api:latest
+          docker push ${{ secrets.DOCKER_USERNAME }}/crypto-api:${{ github.sha }}
+
+      # 🔹 Dashboard
+      - name: Build & push dashboard
+        run: |
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/crypto-dashboard:latest \
+                       -f docker/dashboard/Dockerfile .
+          docker push ${{ secrets.DOCKER_USERNAME }}/crypto-dashboard:latest
+
+      # 🔹 Stream Producer
+      - name: Build & push stream producer
+        run: |
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/stream-producer:latest \
+                       -f docker/stream_producer/Dockerfile .
+          docker push ${{ secrets.DOCKER_USERNAME }}/stream-producer:latest
+
+      # 🔹 Spark
+      - name: Build & push spark
+        run: |
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/crypto-spark:latest \
+                       -f docker/spark/Dockerfile .
+          docker push ${{ secrets.DOCKER_USERNAME }}/crypto-spark:latest
