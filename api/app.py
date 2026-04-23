@@ -13,7 +13,6 @@ app = FastAPI(
     version="1.0.0"
 )
 
-
 REQUEST_COUNT = Counter(
     "cryptoquant_api_requests_total",
     "Total number of API requests.",
