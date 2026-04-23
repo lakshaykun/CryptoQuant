@@ -12,17 +12,31 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       # 🔍 Detect changed files (robust)
       - name: Get changed files
         id: changes
         run: |
-          CHANGED=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }})
+          if [ -z "${{ github.event.before }}" ] || [ "${{ github.event.before }}" = "0000000000000000000000000000000000000000" ]; then
+            echo "First commit or unknown base → build everything"
 
-          echo "api=$(echo "$CHANGED" | grep '^api/' || true)" >> $GITHUB_OUTPUT
-          echo "dashboard=$(echo "$CHANGED" | grep '^dashboard/' || true)" >> $GITHUB_OUTPUT
-          echo "stream=$(echo "$CHANGED" | grep '^pipelines/ingestion/streaming/' || true)" >> $GITHUB_OUTPUT
-          echo "spark=$(echo "$CHANGED" | grep '^docker/spark/' || true)" >> $GITHUB_OUTPUT
+            echo "api=true" >> $GITHUB_OUTPUT
+            echo "dashboard=true" >> $GITHUB_OUTPUT
+            echo "stream=true" >> $GITHUB_OUTPUT
+            echo "spark=true" >> $GITHUB_OUTPUT
+          else
+            CHANGED=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }})
+
+            echo "Changed files:"
+            echo "$CHANGED"
+
+            echo "api=$(echo "$CHANGED" | grep '^api/' || true)" >> $GITHUB_OUTPUT
+            echo "dashboard=$(echo "$CHANGED" | grep '^dashboard/' || true)" >> $GITHUB_OUTPUT
+            echo "stream=$(echo "$CHANGED" | grep '^pipelines/ingestion/streaming/' || true)" >> $GITHUB_OUTPUT
+            echo "spark=$(echo "$CHANGED" | grep '^docker/spark/' || true)" >> $GITHUB_OUTPUT
+          fi
 
       # 🔐 Login only if needed
       - name: Login to Docker Hub
