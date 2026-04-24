@@ -1,0 +1,6 @@
+asyncpg
+deltalake
+pandas
+python-dotenv
+pyarrow
+pyyaml

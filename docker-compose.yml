@@ -63,6 +63,18 @@ services:
     volumes:
       - ./medallion:/app/medallion
 
+  dashboard-api:
+    build:
+      context: .
+      dockerfile: dashboard/backend/Dockerfile
+    container_name: crypto-dashboard-api
+    ports:
+      - "8000:8000"
+    depends_on:
+      - timescaledb
+    env_file:
+      - .env
+
 volumes:
   kafka-data:
   timescaledb-data:
