@@ -40,7 +40,7 @@ def _cast_prediction_columns(df):
     )
 
 
-def main():
+def main(df=None):
     logger = get_logger("predictions_job")
 
     spark = SparkSession.builder.appName("predictions-job").getOrCreate()

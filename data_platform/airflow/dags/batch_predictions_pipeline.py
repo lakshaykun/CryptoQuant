@@ -1,3 +1,5 @@
+# airflow/dags/batch_predictions_pipeline.py
+
 from airflow import DAG
 from airflow.operators.bash import BashOperator
 from datetime import datetime, timedelta

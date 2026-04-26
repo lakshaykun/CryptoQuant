@@ -13,6 +13,7 @@ from utils_global.logger import get_logger
 
 logger = get_logger("spark_predictions")
 data_config = load_config("configs/data.yaml")
+kafkaConfig = load_config("configs/kafka.yaml")
 spark = get_spark(logger)
 
 
@@ -94,6 +95,15 @@ def _process_predictions(df, epoch_id):
 
 gold_path = data_config["tables"]["gold_market"]["path"]
 checkpoint_path = data_config["checkpoints"]["predictions_log_return_lead1"]
+
+brokers = kafkaConfig["brokers"]
+
+df = spark.readStream \
+    .format("kafka") \
+    .option("kafka.bootstrap.servers", brokers) \
+    .option("subscribe", list(kafkaConfig["topics"].keys())[0]) \
+    .option("startingOffsets", "latest") \
+    .load()
 
 gold_stream = (
     spark.readStream

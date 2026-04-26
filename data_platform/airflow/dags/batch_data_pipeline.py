@@ -11,7 +11,7 @@ def build_spark_submit(task_script):
     return f"""
     docker exec cryptoquant-spark-1 spark-submit \
       --master local[*] \
-    --packages io.delta:delta-spark_2.12:3.1.0 \
+      --packages io.delta:delta-spark_2.12:3.1.0 \
       --conf spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension \
       --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog \
       /opt/app/{task_script}

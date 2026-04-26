@@ -31,7 +31,7 @@ def main():
 
         last_open_times_symbols = get_last_processed_time_symbols(
             spark,
-            "market_state",
+            "market_batch_state",
             symbols,
             state_date,
         )
