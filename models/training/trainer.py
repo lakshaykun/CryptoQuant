@@ -8,7 +8,7 @@ import lightgbm as lgb
 import pandas as pd
 from models.registry.mlflow_registery import (
     log_dataframe,
-    log_scaler,
+    # log_scaler,
     start_run,
     log_params,
     log_metrics,
@@ -51,9 +51,9 @@ class Trainer:
         X_test = test_df[self.config.get("features")]
         y_test = test_df[self.config.get("target")]
 
-        scaler = StandardScaler()
-        X_train = scaler.fit_transform(X_train)
-        X_test = scaler.transform(X_test)
+        # scaler = StandardScaler()
+        # X_train = scaler.fit_transform(X_train)
+        # X_test = scaler.transform(X_test)
 
 
         best_score = float("inf")
@@ -93,7 +93,7 @@ class Trainer:
             raise RuntimeError("No trained model completed successfully, nothing to register in MLflow")
 
         with start_run(run_id=best_run_id):
-            log_scaler(scaler)
+            # log_scaler(scaler)
 
             if best_report is not None:
                 log_dataframe(best_report, f"best_{best_model_name}_backtest.csv", artifact_path="best_model")

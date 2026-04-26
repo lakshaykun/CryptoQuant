@@ -85,15 +85,20 @@ def load_data(
 
     drift_path = model_config.get("monitoring", {}).get("history", {}).get("path", "")
     drift_columns = [
+        "timestamp",
         "event_time",
+        "feature_name",
+        "drift_type",
         "drift_score",
-        "data_drift_score",
-        "prediction_drift_score",
         "drift_detected",
+        "model_metric",
+        "overall_drift_score",
+        "data_drift_score",
+        "model_drift_score",
         "triggered",
         "trigger_reason",
     ]
-    drift_frame = load_delta_table(
+    drift_raw = load_delta_table(
         table_path=drift_path,
         columns=drift_columns,
         start=start,
@@ -102,13 +107,51 @@ def load_data(
         repo_root=repo_root,
     )
 
-    if "event_time" in drift_frame.columns:
-        drift_frame["event_time"] = to_utc_datetime(drift_frame["event_time"])
+    drift_summary = pd.DataFrame()
+    drift_features = pd.DataFrame()
+
+    if not drift_raw.empty:
+        time_column = "timestamp" if "timestamp" in drift_raw.columns else "event_time"
+
+        if time_column in drift_raw.columns:
+            drift_raw[time_column] = to_utc_datetime(drift_raw[time_column])
+
+        if "feature_name" in drift_raw.columns:
+            drift_summary = drift_raw[drift_raw["feature_name"] == "__overall__"].copy()
+            drift_features = drift_raw[
+                ~drift_raw["feature_name"].isin(["__overall__", "__model__"])
+            ].copy()
+        else:
+            drift_summary = drift_raw.copy()
+
+        if drift_summary.empty:
+            drift_summary = drift_raw.copy()
+
+        if time_column in drift_summary.columns:
+            if time_column == "timestamp" and "event_time" in drift_summary.columns:
+                drift_summary = drift_summary.drop(columns=["event_time"])
+            drift_summary = drift_summary.rename(columns={time_column: "event_time"})
+
+        if time_column in drift_features.columns:
+            if time_column == "timestamp" and "event_time" in drift_features.columns:
+                drift_features = drift_features.drop(columns=["event_time"])
+            drift_features = drift_features.rename(columns={time_column: "event_time"})
+
+        if "overall_drift_score" in drift_summary.columns:
+            drift_summary["drift_score"] = pd.to_numeric(
+                drift_summary["overall_drift_score"], errors="coerce"
+            )
+
+        if "prediction_drift_score" in drift_summary.columns and "model_drift_score" not in drift_summary.columns:
+            drift_summary["model_drift_score"] = pd.to_numeric(
+                drift_summary["prediction_drift_score"], errors="coerce"
+            )
 
     return {
         "gold": gold_frame,
         "predictions": predictions_frame,
-        "drift": drift_frame,
+        "drift": drift_summary,
+        "drift_features": drift_features,
     }
 
 

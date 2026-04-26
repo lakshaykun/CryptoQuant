@@ -1,14 +1,13 @@
 from airflow import DAG
 from airflow.operators.bash import BashOperator
 from datetime import datetime, timedelta
-from monitoring_callbacks import dag_failure_callback, dag_success_callback
 
 
 def build_spark_submit(task_script):
     return f"""
-    docker exec data_platform-spark-1 spark-submit \
+    docker exec cryptoquant-spark-1 spark-submit \
       --master local[*] \
-      --packages io.delta:delta-spark_2.12:3.0.0 \
+    --packages io.delta:delta-spark_2.12:3.1.0 \
       --conf spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension \
       --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog \
       /opt/app/{task_script}
@@ -18,9 +17,10 @@ def build_spark_submit(task_script):
 with DAG(
     dag_id="batch_predictions_pipeline",
     start_date=datetime(2024, 1, 1),
+    schedule=None,
     catchup=False,
-    on_success_callback=dag_success_callback,
-    on_failure_callback=dag_failure_callback,
+    max_active_runs=1,
+    is_paused_upon_creation=False
 ) as dag:
 
     predict = BashOperator(

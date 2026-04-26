@@ -6,7 +6,7 @@ from typing import Any, Dict
 import streamlit as st
 
 from delta_client import get_model_versions
-from settings import DEFAULT_PROMETHEUS_URL, TIME_RANGE_OPTIONS
+from settings import TIME_RANGE_OPTIONS
 
 
 def build_time_window(selection: str) -> tuple[datetime, datetime]:
@@ -75,17 +75,10 @@ def render_sidebar_filters(data_config: Dict[str, Any], refresh_nonce: int, repo
         key="model_version_filter",
     )
 
-    prometheus_url = st.sidebar.text_input(
-        "Prometheus URL",
-        value=DEFAULT_PROMETHEUS_URL,
-        key="prometheus_url_filter",
-    )
-
     return {
         "refresh_clicked": refresh_clicked,
         "symbol": symbol,
         "start": start,
         "end": end,
         "model_version": model_version,
-        "prometheus_url": prometheus_url,
     }

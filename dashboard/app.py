@@ -8,13 +8,14 @@ from charts import (
     plot_drift_scores,
     plot_ingestion_rate,
     plot_residuals,
+    plot_predicted_vs_actual,
     plot_rolling_rmse,
     plot_row_count_trend,
 )
 from data_service import compute_latest_updates, load_data
 from filters import render_sidebar_filters
 from helpers import safe_float
-from prometheus_client import query_prometheus
+from mlflow_client import get_latest_mlflow_run
 from settings import (
     AUTO_REFRESH_SECONDS,
     DATA_CONFIG_PATH,
@@ -138,7 +139,7 @@ def render_drift_posture(drift_frame: pd.DataFrame) -> None:
     metric_specs = [
         ("drift_score", "Overall drift"),
         ("data_drift_score", "Data drift"),
-        ("prediction_drift_score", "Prediction drift"),
+        ("model_drift_score", "Model drift"),
         (None, "Retraining"),
     ]
     metric_cols = st.columns(len(metric_specs))
@@ -152,12 +153,18 @@ def render_drift_posture(drift_frame: pd.DataFrame) -> None:
         {"Field": "Event time", "Value": _format_display_value(latest_row.get("event_time"))},
         {"Field": "Drift detected", "Value": "Yes" if bool(latest_row.get("drift_detected", False)) else "No"},
         {"Field": "Trigger reason", "Value": trigger_reason},
-        {"Field": "RMSE ratio", "Value": _format_display_value(latest_row.get("prediction_rmse_ratio"))},
+        {"Field": "Model metric", "Value": _format_display_value(latest_row.get("model_metric"))},
     ]
     st.dataframe(pd.DataFrame(detail_rows), width="content", hide_index=True)
 
 
-def render_platform_snapshot(model_config, mlflow_config, gold_frame: pd.DataFrame, drift_frame: pd.DataFrame) -> None:
+def render_platform_snapshot(
+    model_config,
+    mlflow_config,
+    mlflow_run,
+    gold_frame: pd.DataFrame,
+    drift_frame: pd.DataFrame,
+) -> None:
     st.subheader("Platform Snapshot")
 
     monitoring_cfg = model_config.get("monitoring", {}) or {}
@@ -168,7 +175,7 @@ def render_platform_snapshot(model_config, mlflow_config, gold_frame: pd.DataFra
     feature_count = len([feature for feature in model_config.get("features", []) if feature != "symbol"])
     max_threshold = max(
         float(drift_cfg.get("data_drift_threshold", 0.2)),
-        float(drift_cfg.get("prediction_drift_threshold", 0.25)),
+        float(drift_cfg.get("model_drift_threshold", drift_cfg.get("prediction_drift_threshold", 0.25))),
     )
 
     metric_row_1 = st.columns(2)
@@ -186,12 +193,24 @@ def render_platform_snapshot(model_config, mlflow_config, gold_frame: pd.DataFra
         f"Monitoring every {int(scheduler_cfg.get('interval_minutes', 5))} minute(s)"
     )
 
+    run_id = mlflow_run.get("run_id") if isinstance(mlflow_run, dict) else None
+    started_at = mlflow_run.get("started_at") if isinstance(mlflow_run, dict) else None
+    run_metrics = mlflow_run.get("metrics", {}) if isinstance(mlflow_run, dict) else {}
+    run_rmse = safe_float(run_metrics.get("rmse")) if isinstance(run_metrics, dict) else None
+
+    st.caption(
+        "Latest MLflow run: "
+        f"{str(run_id)[:12] if run_id else 'N/A'} | "
+        f"Started: {_format_display_value(started_at) if started_at else 'N/A'} | "
+        f"RMSE: {f'{run_rmse:.6f}' if run_rmse is not None else 'N/A'}"
+    )
+
     render_market_snapshot(gold_frame)
     st.divider()
     render_drift_posture(drift_frame)
 
 
-def render_overview(gold_frame, predictions_frame, drift_frame, prometheus_url: str, refresh_nonce: int) -> None:
+def render_overview(gold_frame, predictions_frame, drift_frame, mlflow_run) -> None:
     st.subheader("Operational Overview")
 
     latest_price = None
@@ -210,17 +229,21 @@ def render_overview(gold_frame, predictions_frame, drift_frame, prometheus_url: 
     if not drift_frame.empty and "drift_score" in drift_frame.columns and drift_frame["drift_score"].notna().any():
         latest_drift = safe_float(drift_frame["drift_score"].dropna().iloc[-1])
 
-    pipeline_latency = query_prometheus(
-        base_url=prometheus_url,
-        query="max(cryptoquant_streaming_lag_seconds)",
-        refresh_nonce=refresh_nonce,
+    mlflow_metrics = mlflow_run.get("metrics", {}) if isinstance(mlflow_run, dict) else {}
+    latest_rmse = safe_float(mlflow_metrics.get("rmse")) if isinstance(mlflow_metrics, dict) else None
+    latest_directional = (
+        safe_float(mlflow_metrics.get("directional_accuracy")) if isinstance(mlflow_metrics, dict) else None
     )
 
-    metric_cols = st.columns(4)
+    metric_cols = st.columns(5)
     metric_cols[0].metric("Latest price", f"{latest_price:.4f}" if latest_price is not None else "N/A")
     metric_cols[1].metric("Latest prediction", f"{latest_prediction:.6f}" if latest_prediction is not None else "N/A")
     metric_cols[2].metric("Drift score", f"{latest_drift:.4f}" if latest_drift is not None else "N/A")
-    metric_cols[3].metric("Pipeline latency", f"{pipeline_latency:.1f}s" if pipeline_latency is not None else "N/A")
+    metric_cols[3].metric("Latest RMSE", f"{latest_rmse:.6f}" if latest_rmse is not None else "N/A")
+    metric_cols[4].metric(
+        "Directional accuracy",
+        f"{latest_directional * 100:.2f}%" if latest_directional is not None else "N/A",
+    )
 
 
 def render_gold_pipeline(data_config, gold_frame, symbol, start, end, refresh_nonce: int) -> None:
@@ -256,6 +279,8 @@ def render_model_behavior(predictions_frame) -> None:
     if predictions_frame.empty:
         st.info("No prediction rows with actual comparisons are available for this time window.")
         return
+    
+    st.plotly_chart(plot_predicted_vs_actual(predictions_frame), width="stretch", theme=None)
 
     st.plotly_chart(plot_close_price_comparison(predictions_frame), width="stretch", theme=None)
 
@@ -266,7 +291,7 @@ def render_model_behavior(predictions_frame) -> None:
         st.plotly_chart(plot_rolling_rmse(predictions_frame), width="stretch", theme=None)
 
 
-def render_drift_monitoring(model_config, drift_frame) -> None:
+def render_drift_monitoring(model_config, drift_frame, drift_feature_frame) -> None:
     st.subheader("Drift Monitoring")
 
     if drift_frame.empty:
@@ -277,7 +302,7 @@ def render_drift_monitoring(model_config, drift_frame) -> None:
 
     st.caption(
         f"Alert thresholds: data {float(drift_cfg.get('data_drift_threshold', 0.2)):.2f}, "
-        f"prediction {float(drift_cfg.get('prediction_drift_threshold', 0.25)):.2f}. "
+        f"model {float(drift_cfg.get('model_drift_threshold', drift_cfg.get('prediction_drift_threshold', 0.25))):.2f}. "
         "Automatic retraining is guarded by cooldown logic in models.monitoring.drift."
     )
 
@@ -285,7 +310,9 @@ def render_drift_monitoring(model_config, drift_frame) -> None:
         plot_drift_scores(
             drift_frame,
             data_threshold=float(drift_cfg.get("data_drift_threshold", 0.2)),
-            prediction_threshold=float(drift_cfg.get("prediction_drift_threshold", 0.25)),
+            model_threshold=float(
+                drift_cfg.get("model_drift_threshold", drift_cfg.get("prediction_drift_threshold", 0.25))
+            ),
         ),
         width="stretch",
         theme=None,
@@ -297,8 +324,8 @@ def render_drift_monitoring(model_config, drift_frame) -> None:
             "event_time",
             "drift_score",
             "data_drift_score",
-            "prediction_drift_score",
-            "prediction_rmse_ratio",
+            "model_drift_score",
+            "model_metric",
             "drift_detected",
             "triggered",
             "trigger_reason",
@@ -309,6 +336,32 @@ def render_drift_monitoring(model_config, drift_frame) -> None:
         sort_column = "event_time" if "event_time" in drift_frame.columns else recent_columns[0]
         recent_history = drift_frame.sort_values(sort_column).tail(8)[recent_columns]
         st.dataframe(recent_history, width="stretch", hide_index=True)
+
+    if not drift_feature_frame.empty:
+        feature_columns = [
+            column
+            for column in ["event_time", "feature_name", "drift_score", "drift_detected"]
+            if column in drift_feature_frame.columns
+        ]
+
+        if feature_columns:
+            sort_columns = [
+                column
+                for column in ["event_time", "drift_score"]
+                if column in drift_feature_frame.columns
+            ]
+            top_feature_rows = drift_feature_frame.copy()
+            if sort_columns:
+                ascending = [True if column == "event_time" else False for column in sort_columns]
+                top_feature_rows = top_feature_rows.sort_values(sort_columns, ascending=ascending)
+
+            if "drift_score" in top_feature_rows.columns:
+                top_feature_rows = top_feature_rows.tail(20).sort_values("drift_score", ascending=False).head(10)
+            else:
+                top_feature_rows = top_feature_rows.tail(10)
+
+            st.caption("Top drifting features from recent drift monitor cycles")
+            st.dataframe(top_feature_rows[feature_columns], width="stretch", hide_index=True)
 
 
 def render_recent_predictions(predictions_frame: pd.DataFrame) -> None:
@@ -365,11 +418,14 @@ def render_dashboard_body(data_config, model_config, mlflow_config, filters, ref
     gold_frame = data["gold"]
     predictions_frame = data["predictions"]
     drift_frame = data["drift"]
+    drift_feature_frame = data.get("drift_features", pd.DataFrame())
+    mlflow_run = get_latest_mlflow_run(mlflow_config, refresh_nonce=refresh_nonce)
 
     st.divider()
     render_platform_snapshot(
         model_config=model_config,
         mlflow_config=mlflow_config,
+        mlflow_run=mlflow_run,
         gold_frame=gold_frame,
         drift_frame=drift_frame,
     )
@@ -379,8 +435,7 @@ def render_dashboard_body(data_config, model_config, mlflow_config, filters, ref
         gold_frame=gold_frame,
         predictions_frame=predictions_frame,
         drift_frame=drift_frame,
-        prometheus_url=filters["prometheus_url"],
-        refresh_nonce=refresh_nonce,
+        mlflow_run=mlflow_run,
     )
 
     st.divider()
@@ -397,7 +452,11 @@ def render_dashboard_body(data_config, model_config, mlflow_config, filters, ref
     render_model_behavior(predictions_frame=predictions_frame)
 
     st.divider()
-    render_drift_monitoring(model_config=model_config, drift_frame=drift_frame)
+    render_drift_monitoring(
+        model_config=model_config,
+        drift_frame=drift_frame,
+        drift_feature_frame=drift_feature_frame,
+    )
 
     st.divider()
     render_recent_predictions(predictions_frame=predictions_frame)

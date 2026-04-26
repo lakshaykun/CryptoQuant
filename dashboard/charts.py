@@ -118,6 +118,34 @@ def plot_row_count_trend(layer_frame: pd.DataFrame, time_col: str) -> go.Figure:
     )
     return apply_plot_style(fig, "Time", "Rows")
 
+def plot_predicted_vs_actual(frame: pd.DataFrame) -> go.Figure:
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatter(
+            x=frame["open_time"],
+            y=frame["prediction"],
+            mode="lines",
+            line=dict(color=COLORS["primary"], width=2.7),
+            fill="tozeroy",
+            fillcolor=_rgba(COLORS["primary"], 0.12),
+            line_shape="spline",
+            name="Prediction",
+            hovertemplate="%{x|%Y-%m-%d %H:%M}<br>Prediction: %{y:.6f}<extra></extra>",
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=frame["open_time"],
+            y=frame["actual_log_return_lead1"],
+            mode="lines",
+            line=dict(color=COLORS["secondary"], width=2.2, dash="dash"),
+            line_shape="spline",
+            name="Actual",
+            hovertemplate="%{x|%Y-%m-%d %H:%M}<br>Actual: %{y:.6f}<extra></extra>",
+        )
+    )
+    return apply_plot_style(fig, "Time", "Log return")
+
 
 def plot_close_price_comparison(frame: pd.DataFrame) -> go.Figure:
     close_values = pd.concat([frame["actual_close"], frame["predicted_close"]], ignore_index=True).dropna()
@@ -224,8 +252,10 @@ def plot_rolling_rmse(frame: pd.DataFrame) -> go.Figure:
     return apply_plot_style(fig, "Time", "RMSE")
 
 
-def plot_drift_scores(frame: pd.DataFrame, data_threshold: float, prediction_threshold: float) -> go.Figure:
+def plot_drift_scores(frame: pd.DataFrame, data_threshold: float, model_threshold: float) -> go.Figure:
     fig = go.Figure()
+
+    model_column = "model_drift_score" if "model_drift_score" in frame.columns else "prediction_drift_score"
 
     if "drift_score" in frame.columns and frame["drift_score"].notna().any():
         fig.add_trace(
@@ -255,16 +285,16 @@ def plot_drift_scores(frame: pd.DataFrame, data_threshold: float, prediction_thr
             )
         )
 
-    if "prediction_drift_score" in frame.columns and frame["prediction_drift_score"].notna().any():
+    if model_column in frame.columns and frame[model_column].notna().any():
         fig.add_trace(
             go.Scatter(
                 x=frame["event_time"],
-                y=frame["prediction_drift_score"],
+                y=frame[model_column],
                 mode="lines",
                 line=dict(color=COLORS["accent"], width=2.2, dash="dot"),
                 line_shape="spline",
-                name="Prediction drift",
-                hovertemplate="%{x|%Y-%m-%d %H:%M}<br>Prediction drift: %{y:.4f}<extra></extra>",
+                name="Model drift",
+                hovertemplate="%{x|%Y-%m-%d %H:%M}<br>Model drift: %{y:.4f}<extra></extra>",
             )
         )
 
@@ -288,36 +318,5 @@ def plot_drift_scores(frame: pd.DataFrame, data_threshold: float, prediction_thr
             )
 
     fig.add_hline(y=data_threshold, line_color=COLORS["warning"], line_dash="dash")
-    fig.add_hline(y=prediction_threshold, line_color=COLORS["danger"], line_dash="dash")
+    fig.add_hline(y=model_threshold, line_color=COLORS["danger"], line_dash="dash")
     return apply_plot_style(fig, "Event time", "Drift score")
-
-
-def plot_prometheus_series(frame: pd.DataFrame, label: str, y_title: str) -> go.Figure:
-    fig = go.Figure()
-    fig.add_trace(
-        go.Scatter(
-            x=frame["timestamp"],
-            y=frame["value"],
-            mode="lines",
-            line=dict(color=COLORS["primary"], width=2.7),
-            fill="tozeroy",
-            fillcolor=_rgba(COLORS["primary"], 0.12),
-            line_shape="spline",
-            name=label,
-            hovertemplate="%{x|%Y-%m-%d %H:%M}<br>%{y:.6f}<extra></extra>",
-        )
-    )
-    if not frame.empty:
-        latest = frame.iloc[-1]
-        fig.add_trace(
-            go.Scatter(
-                x=[latest["timestamp"]],
-                y=[latest["value"]],
-                mode="markers",
-                marker=dict(color=COLORS["accent"], size=8, symbol="circle"),
-                name=f"Latest {label}",
-                showlegend=False,
-                hovertemplate="%{x|%Y-%m-%d %H:%M}<br>Latest value: %{y:.6f}<extra></extra>",
-            )
-        )
-    return apply_plot_style(fig, "Time", y_title)

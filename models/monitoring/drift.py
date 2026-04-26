@@ -2,7 +2,7 @@ import json
 import os
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -10,11 +10,9 @@ import pyarrow as pa
 import requests
 from deltalake import DeltaTable
 from deltalake.writer import write_deltalake
-from prometheus_client import Gauge
 
 from utils_global.config_loader import load_config
 from utils_global.logger import get_logger
-from utils_global.prometheus import build_registry, metric_name, push_registry
 
 
 logger = get_logger(__name__)
@@ -24,51 +22,58 @@ def _safe_numeric(series: pd.Series) -> pd.Series:
     return pd.to_numeric(series, errors="coerce").replace([np.inf, -np.inf], np.nan).dropna()
 
 
-def _population_stability_index(expected: pd.Series, actual: pd.Series, bins: int = 10) -> float:
-    expected_values = _safe_numeric(expected).to_numpy()
-    actual_values = _safe_numeric(actual).to_numpy()
+def _ks_statistic(expected: pd.Series, actual: pd.Series) -> float:
+    expected_values = np.sort(_safe_numeric(expected).to_numpy())
+    actual_values = np.sort(_safe_numeric(actual).to_numpy())
 
     if expected_values.size < 2 or actual_values.size < 2:
         return 0.0
 
-    quantiles = np.linspace(0.0, 1.0, bins + 1)
-    breakpoints = np.quantile(expected_values, quantiles)
-    breakpoints = np.unique(breakpoints)
-
-    if breakpoints.size < 2:
+    sample = np.sort(np.unique(np.concatenate([expected_values, actual_values])))
+    if sample.size < 2:
         return 0.0
 
-    expected_counts, _ = np.histogram(expected_values, bins=breakpoints)
-    actual_counts, _ = np.histogram(actual_values, bins=breakpoints)
+    expected_cdf = np.searchsorted(expected_values, sample, side="right") / expected_values.size
+    actual_cdf = np.searchsorted(actual_values, sample, side="right") / actual_values.size
+    return float(np.max(np.abs(expected_cdf - actual_cdf)))
 
-    expected_dist = np.clip(expected_counts / max(expected_counts.sum(), 1), 1e-4, 1.0)
-    actual_dist = np.clip(actual_counts / max(actual_counts.sum(), 1), 1e-4, 1.0)
 
-    psi = np.sum((actual_dist - expected_dist) * np.log(actual_dist / expected_dist))
-    return float(max(psi, 0.0))
+def _mean_std_shift(expected: pd.Series, actual: pd.Series) -> Tuple[float, float, float]:
+    expected_values = _safe_numeric(expected)
+    actual_values = _safe_numeric(actual)
+
+    if expected_values.size < 2 or actual_values.size < 2:
+        return 0.0, 0.0, 0.0
+
+    expected_mean = float(expected_values.mean())
+    actual_mean = float(actual_values.mean())
+    expected_std = float(expected_values.std(ddof=0))
+    actual_std = float(actual_values.std(ddof=0))
+
+    mean_shift = abs(actual_mean - expected_mean) / (abs(expected_mean) + 1e-6)
+    std_shift = abs(actual_std - expected_std) / (abs(expected_std) + 1e-6)
+    score = 0.5 * mean_shift + 0.5 * std_shift
+    return float(score), float(mean_shift), float(std_shift)
 
 
 def _resolve_monitoring_config() -> Dict:
     model_config = load_config("configs/model.yaml") or {}
-    data_config = load_config("configs/data.yaml") or {}
 
     monitoring_cfg = model_config.get("monitoring") or {}
     drift_cfg = monitoring_cfg.get("drift") or {}
     retraining_cfg = monitoring_cfg.get("retraining") or {}
-    metrics_cfg = monitoring_cfg.get("metrics") or {}
     history_cfg = monitoring_cfg.get("history") or {}
 
     return {
         "model": model_config,
-        "data": data_config,
         "drift": {
             "recent_window": int(drift_cfg.get("recent_window", 5000)),
             "baseline_window": int(drift_cfg.get("baseline_window", 20000)),
             "min_rows": int(drift_cfg.get("min_rows", 200)),
-            "psi_bins": int(drift_cfg.get("psi_bins", 10)),
             "data_drift_threshold": float(drift_cfg.get("data_drift_threshold", 0.2)),
-            "prediction_drift_threshold": float(drift_cfg.get("prediction_drift_threshold", 0.25)),
-            "rmse_increase_threshold": float(drift_cfg.get("rmse_increase_threshold", 0.15)),
+            "model_drift_threshold": float(
+                drift_cfg.get("model_drift_threshold", drift_cfg.get("prediction_drift_threshold", 0.25))
+            ),
         },
         "retraining": {
             "airflow_api_url": retraining_cfg.get(
@@ -85,9 +90,6 @@ def _resolve_monitoring_config() -> Dict:
             "state_path": retraining_cfg.get(
                 "state_path", "/opt/app/delta/state/monitoring/retraining_state.json"
             ),
-        },
-        "metrics": {
-            "job_name": metrics_cfg.get("job_name", "drift_monitor"),
         },
         "history": {
             "path": history_cfg.get("path", "/opt/app/delta/state/monitoring/drift_history"),
@@ -109,61 +111,68 @@ def _load_predictions_frame(columns: List[str]) -> pd.DataFrame:
     return table.to_pandas(columns=columns)
 
 
-def _clip_series(s: pd.Series) -> pd.Series:
-    if s.empty:
-        return s
-    lower = s.quantile(0.02)
-    upper = s.quantile(0.98)
-    return s.clip(lower=lower, upper=upper)
-    
-def _compute_data_drift(
+def _filter_drift_features(features: List[str]) -> List[str]:
+    exclude = {
+        "symbol",
+        "open_time",
+        "date",
+        "ingestion_time",
+        "is_valid_feature_row",
+        "open",
+        "high",
+        "low",
+        "close",
+        "hour",
+        "day_of_week",
+    }
+    return [feature for feature in features if feature not in exclude]
+
+
+def _compute_data_drift_rows(
     baseline_df: pd.DataFrame,
     recent_df: pd.DataFrame,
     features: List[str],
     cfg: Dict,
-) -> Dict:
-    feature_scores = []
-    psi_values = []
+) -> Tuple[List[Dict], Dict]:
+    rows: List[Dict] = []
+    scores: List[float] = []
 
     for feature in features:
         if feature not in baseline_df.columns or feature not in recent_df.columns:
             continue
 
-        baseline_series = _clip_series(_safe_numeric(baseline_df[feature]))
-        recent_series = _clip_series(_safe_numeric(recent_df[feature]))
+        baseline_series = _safe_numeric(baseline_df[feature])
+        recent_series = _safe_numeric(recent_df[feature])
 
         if baseline_series.size < cfg["min_rows"] or recent_series.size < cfg["min_rows"]:
             continue
 
-        baseline_mean = float(baseline_series.mean())
-        recent_mean = float(recent_series.mean())
-        baseline_std = float(baseline_series.std(ddof=0))
-        recent_std = float(recent_series.std(ddof=0))
+        ks_value = _ks_statistic(baseline_series, recent_series)
+        mean_std_score, mean_shift, std_shift = _mean_std_shift(baseline_series, recent_series)
+        drift_score = max(ks_value, mean_std_score)
+        drift_detected = bool(drift_score >= cfg["data_drift_threshold"])
 
-        mean_shift = abs(recent_mean - baseline_mean) / (abs(baseline_mean) + 1e-6)
-        std_shift = abs(recent_std - baseline_std) / (abs(baseline_std) + 1e-6)
-        psi = _population_stability_index(
-            baseline_series,
-            recent_series,
-            bins=cfg["psi_bins"],
+        rows.append(
+            {
+                "feature_name": feature,
+                "drift_type": "data",
+                "drift_score": float(drift_score),
+                "drift_detected": drift_detected,
+                "model_metric": None,
+                "threshold": float(cfg["data_drift_threshold"]),
+                "ks_statistic": float(ks_value),
+                "mean_shift": float(mean_shift),
+                "std_shift": float(std_shift),
+            }
         )
+        scores.append(float(drift_score))
 
-        score = (0.7 * psi) + (0.15 * mean_shift) + (0.15 * std_shift)
-
-        feature_scores.append(score)
-        psi_values.append(psi)
-
-    drift_score = float(np.mean(feature_scores)) if feature_scores else 0.0
-    max_psi = float(np.max(psi_values)) if psi_values else 0.0
-    drift_detected = bool(
-        drift_score >= cfg["data_drift_threshold"] or max_psi >= cfg["data_drift_threshold"]
-    )
-
-    return {
-        "drift_score": drift_score,
-        "max_psi": max_psi,
-        "drift_detected": drift_detected,
+    summary = {
+        "drift_score": float(max(scores)) if scores else 0.0,
+        "drift_detected": bool(any(row["drift_detected"] for row in rows)),
+        "evaluated_features": int(len(rows)),
     }
+    return rows, summary
 
 
 def _prepare_prediction_frame(predictions_df: pd.DataFrame) -> pd.DataFrame:
@@ -178,21 +187,20 @@ def _prepare_prediction_frame(predictions_df: pd.DataFrame) -> pd.DataFrame:
     prepared["actual_log_return_lead1"] = pd.to_numeric(
         prepared["actual_log_return_lead1"], errors="coerce"
     )
-
     return prepared.dropna(subset=["prediction", "actual_log_return_lead1"])
 
 
-def _compute_prediction_drift(predictions_df: pd.DataFrame, cfg: Dict) -> Dict:
+def _compute_model_drift(predictions_df: pd.DataFrame, cfg: Dict) -> Dict:
     prepared = _prepare_prediction_frame(predictions_df)
 
     if prepared.empty or prepared.shape[0] < (cfg["min_rows"] * 2):
         return {
             "drift_score": 0.0,
-            "rmse_increase": 0.0,
-            "rmse_ratio": 1.0,
+            "drift_detected": False,
             "baseline_rmse": 0.0,
             "recent_rmse": 0.0,
-            "drift_detected": False,
+            "rmse_ratio": 1.0,
+            "ks_error": 0.0,
         }
 
     baseline_window = min(cfg["baseline_window"], prepared.shape[0] // 2)
@@ -206,43 +214,23 @@ def _compute_prediction_drift(predictions_df: pd.DataFrame, cfg: Dict) -> Dict:
 
     baseline_rmse = float(np.sqrt(np.mean(np.square(baseline_error))))
     recent_rmse = float(np.sqrt(np.mean(np.square(recent_error))))
+    rmse_delta = abs(recent_rmse - baseline_rmse) / (abs(baseline_rmse) + 1e-6)
+    rmse_ratio = recent_rmse / (abs(baseline_rmse) + 1e-6)
+    ks_error = _ks_statistic(baseline_error, recent_error)
 
-    rmse_increase = max((recent_rmse - baseline_rmse) / (baseline_rmse + 1e-6), 0.0)
-    rmse_ratio = recent_rmse / (baseline_rmse + 1e-6)
-
-    prediction_psi = _population_stability_index(
-        baseline["prediction"],
-        recent["prediction"],
-        bins=cfg["psi_bins"],
-    )
-
-    drift_score = (0.6 * rmse_increase) + (0.4 * prediction_psi)
-    drift_detected = bool(
-        drift_score >= cfg["prediction_drift_threshold"]
-        or rmse_increase >= cfg["rmse_increase_threshold"]
-    )
+    drift_score = max(float(rmse_delta), float(ks_error))
+    drift_detected = bool(drift_score >= cfg["model_drift_threshold"])
 
     return {
         "drift_score": float(drift_score),
-        "rmse_increase": float(rmse_increase),
-        "rmse_ratio": float(rmse_ratio),
+        "drift_detected": drift_detected,
         "baseline_rmse": baseline_rmse,
         "recent_rmse": recent_rmse,
-        "drift_detected": drift_detected,
+        "rmse_ratio": float(rmse_ratio),
+        "ks_error": float(ks_error),
     }
 
-def _filter_drift_features(features: List[str]) -> List[str]:
-    exclude = {
-        "symbol",
-        "open_time",
-        "date",
-        "ingestion_time",
-        "is_valid_feature_row",
-        "open", "high", "low", "close",
-        "hour", "day_of_week",
-    }
 
-    return [f for f in features if f not in exclude]
 def evaluate_drift() -> Dict:
     resolved_cfg = _resolve_monitoring_config()
     model_cfg = resolved_cfg["model"]
@@ -250,11 +238,11 @@ def evaluate_drift() -> Dict:
 
     raw_features = model_cfg.get("features", [])
     features = _filter_drift_features(raw_features)
-    
+
     training_path = model_cfg.get("train_data_path")
     if not training_path or not Path(training_path).exists():
         logger.warning(
-            "Training baseline dataset not found at '%s'. Data drift score will be reported as 0.0 until baseline exists.",
+            "Training baseline dataset not found at '%s'. Data drift score will remain 0.0 until baseline exists.",
             training_path,
         )
         baseline_df = pd.DataFrame(columns=features)
@@ -272,8 +260,7 @@ def evaluate_drift() -> Dict:
 
     recent_df = gold_df.tail(drift_cfg["recent_window"])
     baseline_df = baseline_df.tail(drift_cfg["baseline_window"])
-
-    data_drift = _compute_data_drift(baseline_df, recent_df, features, drift_cfg)
+    data_rows, data_summary = _compute_data_drift_rows(baseline_df, recent_df, features, drift_cfg)
 
     predictions_columns = ["open_time", "symbol", "prediction", "log_return"]
     try:
@@ -284,17 +271,57 @@ def evaluate_drift() -> Dict:
         logger.warning("Failed to load predictions dataset for drift monitoring: %s", exc)
         predictions_df = pd.DataFrame(columns=predictions_columns)
 
-    prediction_drift = _compute_prediction_drift(predictions_df, drift_cfg)
+    model_drift = _compute_model_drift(predictions_df, drift_cfg)
 
-    overall_drift_score = max(data_drift["drift_score"], prediction_drift["drift_score"])
-    drift_detected = bool(data_drift["drift_detected"] or prediction_drift["drift_detected"])
+    overall_score = max(data_summary["drift_score"], model_drift["drift_score"])
+    drift_detected = bool(data_summary["drift_detected"] or model_drift["drift_detected"])
+    timestamp = datetime.now(timezone.utc)
+
+    model_row = {
+        "feature_name": "__model__",
+        "drift_type": "model",
+        "drift_score": float(model_drift["drift_score"]),
+        "drift_detected": bool(model_drift["drift_detected"]),
+        "model_metric": float(model_drift["rmse_ratio"]),
+        "threshold": float(drift_cfg["model_drift_threshold"]),
+        "ks_statistic": float(model_drift["ks_error"]),
+        "mean_shift": None,
+        "std_shift": None,
+    }
+
+    overall_row = {
+        "feature_name": "__overall__",
+        "drift_type": "overall",
+        "drift_score": float(overall_score),
+        "drift_detected": drift_detected,
+        "model_metric": float(model_drift["rmse_ratio"]),
+        "threshold": float(max(drift_cfg["data_drift_threshold"], drift_cfg["model_drift_threshold"])),
+        "ks_statistic": float(max(model_drift["ks_error"], 0.0)),
+        "mean_shift": None,
+        "std_shift": None,
+        "data_drift_score": float(data_summary["drift_score"]),
+        "model_drift_score": float(model_drift["drift_score"]),
+    }
+
+    rows = data_rows + [model_row, overall_row]
+
+    logger.info(
+        "[drift_monitor] timestamp=%s overall=%.4f data=%.4f model=%.4f detected=%s features=%s",
+        timestamp.isoformat(),
+        overall_score,
+        data_summary["drift_score"],
+        model_drift["drift_score"],
+        drift_detected,
+        data_summary["evaluated_features"],
+    )
 
     return {
-        "drift_score": float(overall_drift_score),
+        "timestamp": timestamp,
+        "drift_score": float(overall_score),
         "drift_detected": drift_detected,
-        "data_drift": data_drift,
-        "prediction_drift": prediction_drift,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "data_drift": data_summary,
+        "model_drift": model_drift,
+        "rows": rows,
     }
 
 
@@ -351,7 +378,7 @@ def trigger_retraining(drift_result: Dict) -> Dict:
             "trigger_source": "drift_monitor",
             "drift_score": drift_result["drift_score"],
             "data_drift_score": drift_result["data_drift"]["drift_score"],
-            "prediction_drift_score": drift_result["prediction_drift"]["drift_score"],
+            "model_drift_score": drift_result["model_drift"]["drift_score"],
             "triggered_at": datetime.now(timezone.utc).isoformat(),
         },
     }
@@ -396,85 +423,61 @@ def trigger_retraining(drift_result: Dict) -> Dict:
     }
 
 
-def push_drift_metrics(drift_result: Dict, retraining_triggered: bool) -> None:
-    resolved_cfg = _resolve_monitoring_config()
-    job_name = resolved_cfg["metrics"]["job_name"]
-
-    registry = build_registry()
-
-    data_metric = Gauge(
-        metric_name("data_drift_score"),
-        "Current data drift score.",
-        registry=registry,
-    )
-    prediction_metric = Gauge(
-        metric_name("prediction_drift_score"),
-        "Current prediction drift score.",
-        registry=registry,
-    )
-    alert_metric = Gauge(
-        metric_name("drift_alert"),
-        "Whether drift alert condition is active (1=true, 0=false).",
-        registry=registry,
-    )
-    rmse_ratio_metric = Gauge(
-        metric_name("prediction_rmse_ratio"),
-        "Ratio of recent prediction RMSE over baseline RMSE.",
-        registry=registry,
-    )
-    retrain_metric = Gauge(
-        metric_name("retraining_triggered"),
-        "Whether retraining was triggered on this monitoring cycle (1=true, 0=false).",
-        registry=registry,
-    )
-
-    data_metric.set(float(drift_result["data_drift"]["drift_score"]))
-    prediction_metric.set(float(drift_result["prediction_drift"]["drift_score"]))
-    alert_metric.set(1.0 if drift_result.get("drift_detected") else 0.0)
-    rmse_ratio_metric.set(float(drift_result["prediction_drift"].get("rmse_ratio", 1.0)))
-    retrain_metric.set(1.0 if retraining_triggered else 0.0)
-
-    push_registry(
-        registry,
-        job_name=job_name,
-        grouping_key={"component": "drift_monitor"},
-    )
-
-
 def persist_drift_history(drift_result: Dict, trigger_result: Dict) -> None:
     resolved_cfg = _resolve_monitoring_config()
     history_path = resolved_cfg["history"]["path"]
 
-    row = {
-        "event_time": datetime.now(timezone.utc),
-        "drift_score": float(drift_result["drift_score"]),
-        "drift_detected": bool(drift_result["drift_detected"]),
-        "data_drift_score": float(drift_result["data_drift"]["drift_score"]),
-        "prediction_drift_score": float(drift_result["prediction_drift"]["drift_score"]),
-        "prediction_rmse_ratio": float(drift_result["prediction_drift"].get("rmse_ratio", 1.0)),
-        "triggered": bool(trigger_result.get("triggered", False)),
-        "trigger_reason": trigger_result.get("reason", "unknown"),
-    }
+    timestamp = drift_result["timestamp"]
+    rows_to_write = []
+    for row in drift_result["rows"]:
+        rows_to_write.append(
+            {
+                "timestamp": timestamp,
+                "feature_name": str(row.get("feature_name", "unknown_feature")),
+                "drift_type": str(row.get("drift_type", "unknown")),
+                "drift_score": float(row.get("drift_score", 0.0)),
+                "drift_detected": bool(row.get("drift_detected", False)),
+                "model_metric": row.get("model_metric"),
+                "threshold": float(row.get("threshold", 0.0)),
+                "ks_statistic": row.get("ks_statistic"),
+                "mean_shift": row.get("mean_shift"),
+                "std_shift": row.get("std_shift"),
+                "overall_drift_score": float(drift_result["drift_score"]),
+                "data_drift_score": float(drift_result["data_drift"]["drift_score"]),
+                "model_drift_score": float(drift_result["model_drift"]["drift_score"]),
+                "triggered": bool(trigger_result.get("triggered", False)),
+                "trigger_reason": str(trigger_result.get("reason", "unknown")),
+            }
+        )
 
     try:
-        table = pa.Table.from_pandas(pd.DataFrame([row]), preserve_index=False)
+        frame = pd.DataFrame(rows_to_write)
+        table = pa.Table.from_pandas(frame, preserve_index=False)
         write_deltalake(history_path, table, mode="append")
     except Exception as exc:
-        logger.warning("Failed to persist drift history at %s: %s", history_path, exc)
+        logger.warning(
+            "Failed to append drift history at %s: %s. Attempting one-time overwrite migration.",
+            history_path,
+            exc,
+        )
+        try:
+            table = pa.Table.from_pandas(pd.DataFrame(rows_to_write), preserve_index=False)
+            write_deltalake(history_path, table, mode="overwrite")
+        except Exception as second_exc:
+            logger.error("Failed to write drift history at %s: %s", history_path, second_exc)
 
 
 def run_drift_monitor_job() -> Dict:
     drift_result = evaluate_drift()
     trigger_result = trigger_retraining(drift_result)
-
-    push_drift_metrics(drift_result, retraining_triggered=trigger_result.get("triggered", False))
     persist_drift_history(drift_result, trigger_result)
 
     logger.info(
-        "Drift monitor cycle finished: drift_detected=%s drift_score=%.4f triggered=%s",
+        "Drift monitor cycle finished: drift_detected=%s drift_score=%.4f triggered=%s reason=%s",
         drift_result["drift_detected"],
         drift_result["drift_score"],
         trigger_result.get("triggered", False),
+        trigger_result.get("reason", "unknown"),
     )
 
     return {

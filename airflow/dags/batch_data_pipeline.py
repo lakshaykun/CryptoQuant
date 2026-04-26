@@ -6,13 +6,12 @@ from airflow.operators.python import PythonOperator
 from datetime import datetime, timedelta
 from pipelines.jobs.batch.cleanup_raw import cleanup_task
 from airflow.operators.trigger_dagrun import TriggerDagRunOperator
-from monitoring_callbacks import dag_failure_callback, dag_success_callback
 
 def build_spark_submit(task_script):
     return f"""
-    docker exec data_platform-spark-1 spark-submit \
+    docker exec cryptoquant-spark-1 spark-submit \
       --master local[*] \
-      --packages io.delta:delta-spark_2.12:3.0.0 \
+    --packages io.delta:delta-spark_2.12:3.1.0 \
       --conf spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension \
       --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog \
       /opt/app/{task_script}
@@ -23,8 +22,8 @@ with DAG(
     start_date=datetime(2024, 1, 1),
     schedule="@daily",
     catchup=False,
-    on_success_callback=dag_success_callback,
-    on_failure_callback=dag_failure_callback,
+    max_active_runs=1,
+    is_paused_upon_creation=False
 ) as dag:
 
     ingest_historical = BashOperator(
@@ -49,7 +48,7 @@ with DAG(
         bash_command=build_spark_submit(
             "pipelines/jobs/batch/bronze.py"
         ),
-        retries=1,
+        retries=3,
         retry_delay=timedelta(seconds=10),
     )
 
@@ -58,7 +57,7 @@ with DAG(
         bash_command=build_spark_submit(
             "pipelines/jobs/batch/silver.py"
         ),
-        retries=1,
+        retries=3,
         retry_delay=timedelta(seconds=10),
     )
 
@@ -67,15 +66,20 @@ with DAG(
         bash_command=build_spark_submit(
             "pipelines/jobs/batch/gold.py"
         ),
-        retries=1,
+        retries=3,
         retry_delay=timedelta(seconds=10),
     )
 
     cleanup = PythonOperator(
         task_id="cleanup",
         python_callable=cleanup_task,
-        retries=1,
+        retries=3,
         retry_delay=timedelta(seconds=10),
+    )
+
+    trigger_training = TriggerDagRunOperator(
+        task_id="trigger_training",
+        trigger_dag_id="model_training_pipeline"
     )
 
     trigger_predictions = TriggerDagRunOperator(
@@ -85,4 +89,4 @@ with DAG(
 
     ingest_historical >> bronze
     ingest_today >> bronze
-    bronze >> silver >> gold >> cleanup >> trigger_predictions
+    bronze >> silver >> gold >> cleanup >> trigger_training >> trigger_predictions

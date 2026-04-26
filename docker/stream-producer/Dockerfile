@@ -5,7 +5,7 @@ FROM python:3.10-slim
 USER root
 
 # Install necessary packages
-COPY docker/stream_producer/requirements.txt requirements.txt
+COPY docker/stream-producer/requirements.txt requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
 

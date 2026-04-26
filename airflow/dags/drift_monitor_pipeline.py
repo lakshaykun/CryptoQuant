@@ -2,8 +2,6 @@ from datetime import datetime, timedelta
 
 from airflow import DAG
 from airflow.operators.python import PythonOperator
-
-from monitoring_callbacks import dag_failure_callback, dag_success_callback
 from utils_global.config_loader import load_config
 
 
@@ -24,8 +22,7 @@ with DAG(
     schedule=timedelta(minutes=interval_minutes),
     catchup=False,
     max_active_runs=1,
-    on_success_callback=dag_success_callback,
-    on_failure_callback=dag_failure_callback,
+    is_paused_upon_creation=False
 ) as dag:
     monitor_drift = PythonOperator(
         task_id="monitor_and_trigger_retraining",

@@ -1,8 +1,8 @@
 # configs/data.yaml
 
 interval: "1m"
-start_date: "2026-01-01"
-state_date: "2026-01-01"
+start_date: "2026-04-01"
+state_date: "2026-04-01"
 
 tables:
     bronze_market:

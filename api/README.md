@@ -5,8 +5,8 @@ FastAPI service for online predictions. The API loads the local model artifact, 
 ## Endpoints
 
 - `GET /` - health check.
-- `POST /predict/base` - accepts raw OHLCV rows and builds features internally before scoring.
-- `POST /predict/engineered` - accepts precomputed feature rows and scores them directly.
+- `POST /predict` - accepts engineered feature rows and returns prediction values.
+- `GET /drift` - returns the latest drift summary and top drifting features from Delta drift history.
 
 ## Key files
 
@@ -16,9 +16,9 @@ FastAPI service for online predictions. The API loads the local model artifact, 
 
 ## Contract notes
 
-- Keep the raw prediction route aligned with the Bronze OHLCV schema.
-- Keep the engineered route aligned with the feature columns in `models/config/model_config.py`.
+- Keep the engineered prediction route aligned with the feature columns in `configs/model.yaml`.
 - Treat DataFrame conversion as the boundary between HTTP payloads and model inference.
+- Keep drift summary output aligned with rows persisted by `models/monitoring/drift.py`.
 
 ## Future work
 

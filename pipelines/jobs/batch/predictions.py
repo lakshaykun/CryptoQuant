@@ -1,11 +1,10 @@
 from datetime import datetime
 
-import numpy as np
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
 from pyspark.sql.types import StructType
 
-from models.inference.realtime import RealtimePredictor
+from models.inference.api_client import predict_with_api
 from pipelines.schema.predictions.log_return_lead1 import PREDICTIONS_LOG_RETURN_LEAD1_SCHEMA
 from pipelines.schema.state.predictions import PREDICTIONS_STATE_SCHEMA
 from pipelines.storage.delta.reader import get_last_processed_time_symbols, read_incremental_symbols
@@ -22,14 +21,12 @@ PREDICTIONS_BATCH_COLUMNS = [field.name for field in PREDICTIONS_BATCH_SCHEMA.fi
 
 
 def _predict_batches(pdf_iter):
-    predictor = RealtimePredictor()
-
     for pdf in pdf_iter:
         if pdf.empty:
             continue
 
         batch = pdf.copy()
-        batch["prediction"] = np.asarray(predictor.predict(batch), dtype=float)
+        batch["prediction"] = predict_with_api(batch)
         batch = batch.drop(columns=["ingestion_time"], errors="ignore")
         yield batch[PREDICTIONS_BATCH_COLUMNS]
 

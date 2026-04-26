@@ -21,6 +21,11 @@ def feature_engineering():
     data_path = model_config["train_data_path"]
     df = pd.read_parquet(data_path)
 
+    # remove rows with missing values and with is_valid_feature = False
+    df = df.dropna()
+    df = df[df["is_valid_feature_row"] == True]
+
+    df = df.reset_index(drop=True)
 
     # encoding symbol into integer and using all symbols from config
     symbols = data_config["symbols"]
@@ -28,7 +33,7 @@ def feature_engineering():
     df["symbol"] = df["symbol"].apply(lambda x: symbols.index(x) if x in symbols else -1)
 
     # create target variable
-    df["log_return_lead1"] = df["log_return"].shift(-1)
+    df["log_return_lead1"] = df["close"].shift(-1) / df["close"]
 
     df.to_parquet(data_path)
     logger.info("Feature engineering completed and saved to parquet.")

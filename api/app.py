@@ -1,9 +1,15 @@
-import time
-
 import numpy as np
 import pandas as pd
-from fastapi import FastAPI, HTTPException, Request, Response
-from prometheus_client import CONTENT_TYPE_LATEST, Counter, Gauge, Histogram, generate_latest
+from fastapi import FastAPI, HTTPException
+
+try:
+    from deltalake import DeltaTable
+except Exception:  # pragma: no cover - handled at runtime
+    DeltaTable = None
+
+from utils_global.config_loader import load_config
+from utils_global.logger import get_logger
+
 from models.inference.realtime import RealtimePredictor
 from api.schemas.request import PredictRequest
 
@@ -12,61 +18,152 @@ app = FastAPI(
     description="API for predicting Crypto Returns",
     version="1.0.0"
 )
-
-REQUEST_COUNT = Counter(
-    "cryptoquant_api_requests_total",
-    "Total number of API requests.",
-    ["method", "path", "status"],
-)
-REQUEST_LATENCY = Histogram(
-    "cryptoquant_api_request_latency_seconds",
-    "API request latency in seconds.",
-    ["method", "path"],
-)
-PREDICTION_COUNT = Counter(
-    "cryptoquant_api_predictions_total",
-    "Total number of predictions returned by the API.",
-)
-PREDICTION_ERROR = Histogram(
-    "cryptoquant_api_prediction_error",
-    "Absolute prediction error when ground truth is provided.",
-    buckets=(0.001, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 1.0),
-)
-PREDICTION_ERROR_COUNT = Counter(
-    "cryptoquant_api_prediction_error_observations_total",
-    "Number of prediction error observations.",
-)
-PREDICTION_MAE_LAST = Gauge(
-    "cryptoquant_api_prediction_mae_last",
-    "Mean absolute error from the most recent request that included actuals.",
-)
+logger = get_logger("api")
 
 
-@app.middleware("http")
-async def record_http_metrics(request: Request, call_next):
-    start_time = time.perf_counter()
-    status_code = 500
+def _load_drift_frame() -> pd.DataFrame:
+    if DeltaTable is None:
+        raise HTTPException(
+            status_code=503,
+            detail="deltalake is not available in this API runtime",
+        )
+
+    model_config = load_config("configs/model.yaml") or {}
+    history_path = (model_config.get("monitoring") or {}).get("history", {}).get("path")
+
+    if not history_path:
+        raise HTTPException(status_code=500, detail="Monitoring history path is not configured")
 
     try:
-        response = await call_next(request)
-        status_code = response.status_code
-        return response
-    finally:
-        latency = time.perf_counter() - start_time
-        path = request.url.path
-        method = request.method
-        REQUEST_LATENCY.labels(method=method, path=path).observe(latency)
-        REQUEST_COUNT.labels(method=method, path=path, status=str(status_code)).inc()
+        table = DeltaTable(history_path)
+        available_columns = list(table.schema().to_pyarrow().names)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Unable to load drift history from '{history_path}': {exc}",
+        ) from exc
 
+    if not available_columns:
+        return pd.DataFrame()
 
-@app.get("/metrics")
-def metrics():
-    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
+    selected_columns = [
+        column
+        for column in [
+            "timestamp",
+            "event_time",
+            "feature_name",
+            "drift_type",
+            "drift_score",
+            "drift_detected",
+            "model_metric",
+            "overall_drift_score",
+            "data_drift_score",
+            "model_drift_score",
+            "triggered",
+            "trigger_reason",
+        ]
+        if column in available_columns
+    ]
+
+    if not selected_columns:
+        return pd.DataFrame()
+
+    return table.to_pandas(columns=selected_columns)
 
 @app.get("/")
 def health_check():
     return {
         "status": "running"
+    }
+
+
+@app.get("/drift")
+def get_drift_summary():
+    frame = _load_drift_frame()
+    if frame.empty:
+        return {
+            "status": "ok",
+            "summary": None,
+            "top_features": [],
+        }
+
+    time_column = "timestamp" if "timestamp" in frame.columns else "event_time"
+    if time_column not in frame.columns:
+        raise HTTPException(status_code=500, detail="Drift history is missing a timestamp column")
+
+    frame = frame.copy()
+    frame[time_column] = pd.to_datetime(frame[time_column], errors="coerce", utc=True)
+    frame = frame.dropna(subset=[time_column])
+
+    if frame.empty:
+        return {
+            "status": "ok",
+            "summary": None,
+            "top_features": [],
+        }
+
+    latest_timestamp = frame[time_column].max()
+    latest = frame[frame[time_column] == latest_timestamp]
+
+    overall = pd.DataFrame()
+    if "feature_name" in latest.columns:
+        overall = latest[latest["feature_name"] == "__overall__"]
+
+    if overall.empty:
+        drift_detected = bool(latest.get("drift_detected", pd.Series(dtype=bool)).fillna(False).any())
+        overall_score = float(pd.to_numeric(latest.get("drift_score"), errors="coerce").max())
+        data_score = overall_score
+        model_score = float("nan")
+        triggered = bool(latest.get("triggered", pd.Series(dtype=bool)).fillna(False).any())
+        trigger_reason = "unknown"
+    else:
+        latest_overall = overall.sort_values(time_column).iloc[-1]
+        drift_detected = bool(latest_overall.get("drift_detected", False))
+        overall_score = float(latest_overall.get("overall_drift_score", latest_overall.get("drift_score", 0.0)))
+        data_score = float(latest_overall.get("data_drift_score", overall_score))
+        model_score = float(latest_overall.get("model_drift_score", latest_overall.get("model_metric", 0.0)))
+        triggered = bool(latest_overall.get("triggered", False))
+        trigger_reason = str(latest_overall.get("trigger_reason", "unknown"))
+
+    feature_rows = latest
+    if "feature_name" in latest.columns:
+        feature_rows = latest[~latest["feature_name"].isin(["__overall__", "__model__"])]
+
+    if not feature_rows.empty and "drift_score" in feature_rows.columns:
+        feature_rows = feature_rows.sort_values("drift_score", ascending=False)
+
+    top_features = []
+    for _, row in feature_rows.head(8).iterrows():
+        top_features.append(
+            {
+                "feature_name": str(row.get("feature_name", "unknown_feature")),
+                "drift_score": float(row.get("drift_score", 0.0)),
+                "drift_detected": bool(row.get("drift_detected", False)),
+            }
+        )
+
+    logger.info(
+        "[api_drift] timestamp=%s overall=%.4f data=%.4f model=%.4f detected=%s triggered=%s",
+        latest_timestamp.isoformat(),
+        overall_score,
+        data_score,
+        model_score,
+        drift_detected,
+        triggered,
+    )
+
+    return {
+        "status": "ok",
+        "summary": {
+            "timestamp": latest_timestamp.isoformat(),
+            "drift_detected": drift_detected,
+            "overall_drift_score": overall_score,
+            "data_drift_score": data_score,
+            "model_drift_score": model_score,
+            "triggered": triggered,
+            "trigger_reason": trigger_reason,
+        },
+        "top_features": top_features,
     }
 
 @app.post("/predict")
@@ -95,21 +192,5 @@ def predict(data: PredictRequest):
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     predictions = np.asarray(prediction, dtype=float).reshape(-1)
-    PREDICTION_COUNT.inc(int(len(predictions)))
-
-    if "actual_log_return_lead1" in X.columns:
-        actual = pd.to_numeric(X["actual_log_return_lead1"], errors="coerce")
-        mask = actual.notna().to_numpy()
-
-        if mask.any():
-            observed_actual = actual.to_numpy()[mask]
-            observed_predictions = predictions[mask]
-            absolute_errors = np.abs(observed_predictions - observed_actual)
-
-            for value in absolute_errors:
-                PREDICTION_ERROR.observe(float(value))
-
-            PREDICTION_ERROR_COUNT.inc(int(absolute_errors.size))
-            PREDICTION_MAE_LAST.set(float(absolute_errors.mean()))
 
     return {"prediction": predictions.tolist()}

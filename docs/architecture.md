@@ -1,6 +1,6 @@
 # CryptoQuant Architecture
 
-CryptoQuant is a Binance market MLOps workspace built around batch backfills, live streaming ingestion, Spark + Delta Lake medallion tables, pandas-based model training, FastAPI serving, and Prometheus-driven observability.
+CryptoQuant is a Binance market MLOps workspace built around batch backfills, live streaming ingestion, Spark + Delta Lake medallion tables, pandas-based model training, FastAPI serving, and lightweight drift-driven retraining.
 
 ## Architecture Tree
 
@@ -21,8 +21,8 @@ flowchart LR
     Train[Training and evaluation]
     ModelArtifact[models/artifacts/models/model.pkl]
     FeatureBuild[models/features/build_features.py]
-    API[FastAPI API + /metrics]
-    Monitoring[Prometheus + exporters]
+    API[FastAPI API]
+    Monitoring[Drift Monitor + MLflow]
     Drift[models/monitoring/drift.py]
     Retrain[Airflow model_training_pipeline trigger]
 
@@ -60,7 +60,7 @@ The tree below is truncated to the directories and files that define the current
 │       ├── batch_predictions_pipeline.py  # batch prediction DAG
 │       ├── drift_monitor_pipeline.py  # drift monitor DAG
 │       ├── model_training_pipeline.py  # training DAG
-│       └── monitoring_callbacks.py  # Prometheus Airflow callbacks
+│       └── monitoring_callbacks.py  # Airflow run logging callbacks
 
 ├── api/  # prediction service
 │   ├── README.md  # API notes
@@ -110,7 +110,6 @@ The tree below is truncated to the directories and files that define the current
 ├── docs/  # documentation
 │   ├── architecture.md  # architecture doc
 │   ├── commands.md  # run commands
-│   ├── prometheus.md  # Prometheus guide
 │   └── data/
 │       ├── binance.md  # Binance notes
 │       └── storage.md  # storage notes
@@ -152,10 +151,7 @@ The tree below is truncated to the directories and files that define the current
 │   ├── data_ingest.ipynb  # ingest notebook
 │   └── model.ipynb  # model notebook
 
-├── monitoring/  # platform observability assets
-│   └── prometheus/
-│       ├── alerts.yml  # alert rules
-│       └── prometheus.yml  # scrape config
+├── monitoring/  # platform monitoring assets (drift state under delta/state)
 
 ├── pipelines/  # data pipeline code
 │   ├── README.md  # pipeline notes
@@ -232,7 +228,6 @@ The tree below is truncated to the directories and files that define the current
 └── utils_global/  # shared helpers
     ├── config_loader.py  # YAML loader
     ├── logger.py  # logger helper
-    └── prometheus.py  # Pushgateway helper and metric naming
 ```
 
 ## Tech Stack
@@ -245,7 +240,7 @@ The tree below is truncated to the directories and files that define the current
 - FastAPI, Pydantic, and Uvicorn for the prediction API.
 - Pandas and NumPy for model-side feature handling and inference preprocessing.
 - XGBoost, scikit-learn, joblib, and MLflow for training, evaluation, artifact loading, and logging.
-- Prometheus, Pushgateway, Node Exporter, cAdvisor, Kafka Exporter, and statsd-exporter for observability.
+- Delta history + MLflow metrics for model monitoring and drift-driven retraining.
 - websockets and requests for Binance live and historical ingestion.
 - PyYAML for configuration loading from `configs/*.yaml`.
 - PostgreSQL 15 with `psycopg2-binary` for the Airflow metadata database.
@@ -260,4 +255,4 @@ The tree below is truncated to the directories and files that define the current
 - `logs/` contains DAG, scheduler, and processor-manager runtime logs.
 - `data_platform/logs/` is present as the mounted log directory used by the Compose stack.
 - The API is launched from `scripts/run_api.sh`, which sources the local virtual environment when available and runs `uvicorn api.app:app`.
-- Prometheus scrape and alert configuration lives under `monitoring/prometheus/`.
+- Drift history is stored in Delta under `delta/state/monitoring/drift_history/`.

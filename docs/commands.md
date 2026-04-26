@@ -46,7 +46,7 @@ http://localhost:8080 - airflow / airflow
 
 
 ### clear data in delta
-sudo rm -rf delta/bronze/market delta/silver/market delta/raw_data/market delta/state/market delta/gold/market delta/checkpoints
+sudo rm -rf delta/bronze/market delta/silver/market delta/raw_data/market delta/state/market delta/state/monitoring delta/state/predictions delta/gold/market delta/checkpoints delta/predictions
 
 ### To reset permissions if needed
 sudo chown -R $USER:$USER .
@@ -57,13 +57,10 @@ docker exec -it spark-master \
 spark-submit pipelines/ingestion/streaming/spark/spark_streaming.py
 
 
-### Monitoring stack
-docker compose up -d prometheus pushgateway node-exporter cadvisor kafka-exporter airflow-statsd-exporter api
+### Drift monitoring checks
+docker exec -it airflow-scheduler python -m models.monitoring.drift
 
-http://localhost:9090  # Prometheus UI
-http://localhost:8000/metrics  # FastAPI metrics
-http://localhost:9100/metrics  # Node exporter
-http://localhost:9091/metrics  # Pushgateway
+curl http://localhost:8000/drift
 
 
 ### Run drift monitor manually

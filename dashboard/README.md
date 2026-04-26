@@ -9,7 +9,7 @@ It is designed as a data-first operational view for:
 - market and medallion pipeline visibility,
 - model behavior diagnostics,
 - drift monitoring,
-- Prometheus-backed API/system health.
+- retraining lifecycle visibility.
 
 ## What the dashboard includes
 
@@ -17,7 +17,6 @@ It is designed as a data-first operational view for:
   - Symbol
   - Time range (15m, 1h, 6h, 24h, custom)
   - Model version
-  - Prometheus URL
 - Auto refresh every 30 seconds with filter state preserved.
 - Manual refresh button.
 - Hero banner with model registry and MLflow tracking context.
@@ -29,7 +28,7 @@ It is designed as a data-first operational view for:
   - Latest price
   - Latest prediction
   - Drift score
-  - Pipeline latency
+  - Latest model RMSE / directional accuracy from MLflow
 - Data pipeline views:
   - Gold ingestion rate
   - Gold row growth trend
@@ -40,8 +39,8 @@ It is designed as a data-first operational view for:
   - Residuals
   - Rolling RMSE
 - Drift monitoring from Delta history, including retraining trigger markers.
-- Operational health for core services, exporters, drift alert state, retraining state, and Airflow DAG telemetry.
-- Prometheus query and query_range charts for request rate, p95 latency, and error rate.
+- Drift feature ranking and retraining trigger reasons from Delta history.
+- Latest MLflow run metrics for model quality context.
 
 ## Module layout
 
@@ -51,7 +50,7 @@ It is designed as a data-first operational view for:
 - helpers.py: Common utility conversions and path resolution.
 - delta_client.py: Delta Lake access and model version loading.
 - data_service.py: Data assembly for dashboard sections.
-- prometheus_client.py: Prometheus API queries.
+- mlflow_client.py: lightweight MLflow API lookups.
 - charts.py: Plotly chart builders.
 
 ## Requirements
@@ -84,6 +83,5 @@ Open:
 
 - The dashboard resolves /opt/app paths to local project paths automatically for Docker/local compatibility.
 - The dashboard container is built from [docker/dashboard/Dockerfile](../docker/dashboard/Dockerfile) for CI/CD and compose use.
-- If Prometheus is unavailable, Prometheus-backed charts fail gracefully without crashing the app.
-- Delta tables and Prometheus responses are cached with short TTLs for responsive rendering.
+- Delta tables and MLflow responses are cached with short TTLs for responsive rendering.
 - The theme settings live in `.streamlit/config.toml` and must keep `chartSequentialColors` at 10 values for Streamlit compatibility.

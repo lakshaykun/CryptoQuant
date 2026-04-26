@@ -12,7 +12,6 @@ DATA_CONFIG_PATH = REPO_ROOT / "configs" / "data.yaml"
 MODEL_CONFIG_PATH = REPO_ROOT / "configs" / "model.yaml"
 MLFLOW_CONFIG_PATH = REPO_ROOT / "configs" / "mlflow.yaml"
 
-DEFAULT_PROMETHEUS_URL = "http://localhost:9090"
 AUTO_REFRESH_SECONDS = 30
 
 TIME_RANGE_OPTIONS = ["Last 15 min", "1 hour", "6 hours", "24 hours", "Custom range"]

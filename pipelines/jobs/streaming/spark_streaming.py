@@ -3,7 +3,6 @@
 import time
 from datetime import datetime, timezone
 
-from prometheus_client import Gauge
 from pyspark.sql import functions as F
 from pipelines.ingestion.streaming.utils.helpers import parse_kafka_message
 from pipelines.schema.bronze.market import BRONZE_MARKET_SCHEMA
@@ -14,7 +13,6 @@ from pipelines.transformers.gold.market import GoldMarketTransformer
 from pipelines.transformers.silver.market import SilverMarketTransformer
 from utils_global.logger import get_logger
 from utils_global.config_loader import load_config
-from utils_global.prometheus import build_registry, metric_name, push_registry
 from pipelines.schema.raw.market import RAW_MARKET_SCHEMA
 from pipelines.utils.spark import get_spark
 from pipelines.storage.delta.writer import write_batch
@@ -54,35 +52,6 @@ def _estimate_streaming_lag_seconds(df):
 
     lag = (datetime.now(timezone.utc) - max_open_time).total_seconds()
     return float(max(lag, 0.0))
-
-
-def _push_streaming_metrics(records_processed, batch_processing_time, streaming_lag):
-    registry = build_registry()
-
-    records_metric = Gauge(
-        metric_name("records_processed"),
-        "Number of records processed in the latest Spark micro-batch.",
-        ["pipeline_job"],
-        registry=registry,
-    )
-    batch_time_metric = Gauge(
-        metric_name("batch_processing_time_seconds"),
-        "Processing time in seconds for the latest Spark micro-batch.",
-        ["pipeline_job"],
-        registry=registry,
-    )
-    lag_metric = Gauge(
-        metric_name("streaming_lag_seconds"),
-        "Lag in seconds between now and latest processed market open_time.",
-        ["pipeline_job"],
-        registry=registry,
-    )
-
-    records_metric.labels(pipeline_job="spark_streaming").set(float(records_processed))
-    batch_time_metric.labels(pipeline_job="spark_streaming").set(float(batch_processing_time))
-    lag_metric.labels(pipeline_job="spark_streaming").set(float(streaming_lag))
-
-    push_registry(registry, job_name="spark_streaming", grouping_key={"component": "spark_streaming"})
 
 
 def _process_pipeline(df, epoch_id):
@@ -132,7 +101,6 @@ def _process_pipeline(df, epoch_id):
 
     duration = time.perf_counter() - start_time
     lag_seconds = _estimate_streaming_lag_seconds(df)
-    _push_streaming_metrics(records_processed, duration, lag_seconds)
     logger.info(
         "[spark_streaming] epoch=%s records=%s duration=%.3fs lag=%.3fs",
         epoch_id,

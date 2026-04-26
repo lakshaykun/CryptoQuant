@@ -4,6 +4,7 @@ expected_columns : [
     'open_time',
     'symbol',
 
+    # core
     'open',
     'high',
     'low',
@@ -11,66 +12,109 @@ expected_columns : [
     'volume',
     'trades',
     'taker_buy_base',
-    
+
+    # returns & volatility
     'log_return',
     'volatility',
 
+    # microstructure
     'imbalance_ratio',
     'buy_ratio',
-    
+
+    # lags
     'log_return_lag1',
     'log_return_lag2',
     'buy_ratio_lag1',
 
+    # moving averages
     'ma_5',
     'ma_20',
+    'ma_50',
 
+    # rolling stats
     'volatility_5',
     'volume_5',
     'buy_ratio_5',
+    'volatility_std_10',
 
-    'momentum',
+    # return features
+    'return_5',
+    'return_20',
+
+    # derived signals
+    'momentum_ratio',
     'volume_spike',
-    'price_range_ratio',
     'body_size',
+    'volatility_ratio',
 
-    'hour',
-    'day_of_week',
-    
+    # trend
     'trend_strength',
-    'volatility_ratio'
+    'trend_long',
+    'trend_regime',
+
+    # microstructure dynamics
+    'imbalance_change',
+
+    # interactions
+    'volatility_momentum',
+
+    # mean reversion
+    'price_deviation',
+
+    # time encoding
+    'hour_sin',
+    'hour_cos',
+
+    # metadata
+    'is_valid_feature_row'
 ]
 
 features : [
     'symbol',
 
-    'volume',
-    'trades',
-    'taker_buy_base',
-    
+    # returns
     'log_return',
-    'volatility',
-
-    'imbalance_ratio',
-    'buy_ratio',
-    
     'log_return_lag1',
     'log_return_lag2',
+    'return_5',
+    'return_20',
+
+    # volatility
+    'volatility',
+    'volatility_5',
+    'volatility_std_10',
+    'volatility_ratio',
+
+    # microstructure
+    'imbalance_ratio',
+    'imbalance_change',
+    'buy_ratio',
+    'buy_ratio_5',
     'buy_ratio_lag1',
 
+    # trend
     'ma_5',
     'ma_20',
-
-    'volatility_5',
-    'volume_5',
-    'buy_ratio_5',
-
-    'momentum',
-    'price_range_ratio',
-    'body_size',
-    
+    'ma_50',
     'trend_strength',
-    'volatility_ratio'
+    'trend_long',
+
+    # momentum
+    'momentum_ratio',
+
+    # volume dynamics
+    'volume_spike',
+
+    # price structure
+    'body_size',
+    'price_deviation',
+
+    # interactions
+    'volatility_momentum',
+
+    # time encoding
+    'hour_sin',
+    'hour_cos'
 ]
 
 target: "log_return_lead1"
@@ -81,40 +125,43 @@ train_data_path: "models/artifacts/train_data.parquet"
 
 model_params:
     xgboost:
-        n_estimators: 300        # ↓ reduce
-        max_depth: 6
-        learning_rate: 0.03
-        subsample: 0.8
-        colsample_bytree: 0.8
-        reg_alpha: 0.1
-        reg_lambda: 0.1
+        n_estimators: 800
+        max_depth: 5
+        learning_rate: 0.02
+        subsample: 0.7
+        colsample_bytree: 0.7
+        reg_alpha: 0.5
+        reg_lambda: 1.0
+        min_child_weight: 5
+        gamma: 0.1
         n_jobs: 1
         random_state: 42
 
     catboost:
-        iterations: 500          # ↓ reduce
-        learning_rate: 0.03
-        depth: 6
-        l2_leaf_reg: 3
+        iterations: 1000
+        learning_rate: 0.02
+        depth: 5
+        l2_leaf_reg: 5
         loss_function: RMSE
         eval_metric: RMSE
         bootstrap_type: Bernoulli
-        subsample: 0.8
-        rsm: 0.8
+        subsample: 0.7
+        rsm: 0.7
         od_type: Iter
-        od_wait: 50
+        od_wait: 100
         verbose: False
         random_state: 42
 
     lightgbm:
-        n_estimators: 300        # ↓ reduce
-        learning_rate: 0.05
-        num_leaves: 63
+        n_estimators: 800
+        learning_rate: 0.03
+        num_leaves: 31
         max_depth: -1
-        subsample: 0.8
-        colsample_bytree: 0.8
-        reg_alpha: 0.1
-        reg_lambda: 0.1
+        min_data_in_leaf: 50
+        subsample: 0.7
+        colsample_bytree: 0.7
+        reg_alpha: 0.5
+        reg_lambda: 1.0
         n_jobs: 1
         random_state: 42
 
@@ -125,10 +172,8 @@ monitoring:
         recent_window: 5000
         baseline_window: 200000
         min_rows: 200
-        psi_bins: 5
         data_drift_threshold: 0.25
-        prediction_drift_threshold: 0.25
-        rmse_increase_threshold: 0.15
+        model_drift_threshold: 0.25
 
     retraining:
         airflow_api_url: "http://airflow-webserver:8080/api/v1"
@@ -139,12 +184,7 @@ monitoring:
         state_path: "/opt/app/delta/state/monitoring/retraining_state.json"
 
     scheduler:
-        interval_minutes: 1
-
-    metrics:
-        namespace: "cryptoquant"
-        pushgateway_url: "http://pushgateway:9091"
-        job_name: "drift_monitor"
+        interval_minutes: 5
 
     history:
         path: "/opt/app/delta/state/monitoring/drift_history"

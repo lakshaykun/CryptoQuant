@@ -10,12 +10,12 @@ spark_configs:
   spark.sql.catalog.spark_catalog: org.apache.spark.sql.delta.catalog.DeltaCatalog
 
   # Performance (local optimized)
-  spark.sql.shuffle.partitions: 4
-  spark.default.parallelism: 4
+  spark.sql.shuffle.partitions: 2
+  spark.default.parallelism: 2
 
   # Memory
-  spark.driver.memory: 1g
-  spark.executor.memory: 1g
+  spark.driver.memory: 512m
+  spark.executor.memory: 512m
   spark.driver.maxResultSize: 512m
 
   spark.executor.memoryOverhead: 256m
@@ -25,13 +25,10 @@ spark_configs:
   # Adaptive Query Execution
   spark.sql.adaptive.enabled: true
   spark.sql.adaptive.coalescePartitions.enabled: true
-  spark.sql.adaptive.shuffle.targetPostShuffleInputSize: 32MB
+  spark.sql.adaptive.advisoryPartitionSizeInBytes: 32MB
 
   # Storage
   spark.sql.warehouse.dir: /tmp/spark-warehouse
-
-  # Arrow (faster pandas ↔ spark)
-  spark.sql.execution.arrow.pyspark.enabled: true
 
   # Logging / Debugging
   spark.ui.enabled: false

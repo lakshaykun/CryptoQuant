@@ -26,8 +26,13 @@ class GoldMarketTransformer:
             .otherwise(0.0)
         )
 
-        # volatility = high - low 
-        df = df.withColumn("volatility", F.col("high") - F.col("low"))
+        # volatility = (high - low) / close
+        df = df.withColumn(
+            "volatility",
+            F.when(F.col("close") > 0,
+                (F.col("high") - F.col("low")) / F.col("close"))
+            .otherwise(0.0)
+        )
 
         # imbalance = taker_buy_base - (volume - taker_buy_base)
         df = df.withColumn(
@@ -47,6 +52,7 @@ class GoldMarketTransformer:
 
         base_window = Window.partitionBy("symbol").orderBy("open_time")
 
+
         df = df.withColumn("log_return_lag1", F.lag("log_return", 1).over(base_window))
         df = df.withColumn("log_return_lag2", F.lag("log_return", 2).over(base_window))
         df = df.withColumn("buy_ratio_lag1", F.lag("buy_ratio", 1).over(base_window))
@@ -61,17 +67,16 @@ class GoldMarketTransformer:
         df = df.withColumn("volume_5", F.avg("volume").over(window_5))
         df = df.withColumn("buy_ratio_5", F.avg("buy_ratio").over(window_5))
 
-        df = df.withColumn("momentum", F.col("close") - F.col("ma_5"))
+        df = df.withColumn(
+            "momentum_ratio",
+            F.when(F.col("ma_5") > 0,
+                F.col("close") / F.col("ma_5"))
+            .otherwise(0.0)
+        )
         df = df.withColumn(
             "volume_spike",
             F.when(F.col("volume_5") > 0,
                 F.col("volume") / F.col("volume_5"))
-            .otherwise(0.0)
-        )
-        df = df.withColumn(
-            "price_range_ratio",
-            F.when(F.col("close") > 0,
-                (F.col("high") - F.col("low")) / F.col("close"))
             .otherwise(0.0)
         )
 
@@ -81,8 +86,6 @@ class GoldMarketTransformer:
                 (F.col("close") - F.col("open")) / F.col("close"))
             .otherwise(0.0)
         )
-        df = df.withColumn("hour", F.hour(F.col("open_time")))
-        df = df.withColumn("day_of_week", F.dayofweek(F.col("open_time")))
         df = df.withColumn("trend_strength", F.col("ma_5") - F.col("ma_20"))
 
         df = df.withColumn(
@@ -92,6 +95,44 @@ class GoldMarketTransformer:
             .otherwise(0.0)
         )
         
+        df = df.withColumn("return_5", F.sum("log_return").over(window_5))
+        df = df.withColumn("return_20", F.sum("log_return").over(window_20))
+        df = df.withColumn(
+            "volatility_std_10",
+            F.coalesce(
+                F.stddev("log_return").over(base_window.rowsBetween(-10, -1)),
+                F.lit(0.0)
+            )
+        )
+
+        window_50 = base_window.rowsBetween(-50, -1)
+
+        df = df.withColumn("ma_50", F.avg("close").over(window_50))
+        df = df.withColumn("trend_long", F.col("ma_20") - F.col("ma_50"))
+
+        df = df.withColumn(
+            "imbalance_change",
+            F.col("imbalance_ratio") - F.lag("imbalance_ratio", 1).over(base_window)
+        )
+
+        df = df.withColumn("volatility_momentum", F.col("volatility") * F.col("momentum_ratio"))
+        
+        df = df.withColumn(
+            "trend_regime",
+            F.when(F.abs(F.col("trend_long")) > F.stddev("trend_long").over(window_20), 1).otherwise(0)
+        )
+
+        df = df.withColumn(
+            "price_deviation",
+            (F.col("close") - F.col("ma_20")) / F.col("ma_20")
+        )
+
+        df = df.withColumn("hour", F.hour(F.col("open_time")))
+        df = df.withColumn("hour_sin", F.sin(2 * 3.1415 * F.col("hour") / 24))
+        df = df.withColumn("hour_cos", F.cos(2 * 3.1415 * F.col("hour") / 24))
+        df = df.drop("hour")
+
+
         # metadata
         df = df.withColumn(
             "is_valid_feature_row",

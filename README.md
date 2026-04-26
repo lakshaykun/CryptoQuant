@@ -1,66 +1,63 @@
 # CryptoQuant
 
-CryptoQuant is a crypto market MLOps workspace for Binance market data. It ingests raw OHLCV candles, writes them into a Delta Lake medallion layout, engineers features, trains models, and serves predictions through FastAPI and WebSocket entry points.
+CryptoQuant is a crypto market MLOps workspace for Binance market data. The project ingests raw OHLCV candles, writes them into a Delta Lake bronze/silver/gold layout, engineers features for training and inference, serves predictions through FastAPI, and tracks model health through lightweight drift monitoring.
 
-## What lives here
+## Project Layout
 
-- [api/](api/) - FastAPI prediction service.
-- [dashboard/](dashboard/) - Streamlit monitoring and quant research dashboard.
-- [pipelines/](pipelines/) - batch and streaming ingestion, medallion transforms, Delta I/O, and validation.
-- [models/](models/) - feature engineering, training, evaluation, inference, and registry helpers.
-- [delta/](delta/) - Delta Lake medallion and state storage used by the pipeline.
-- [configs/](configs/) - shared YAML configuration for data, Spark, and Kafka.
-- [scripts/](scripts/) - convenience launchers for local development.
-- [notebooks/](notebooks/) - exploratory notebooks and prototype analysis.
+- [api/](api/) - FastAPI prediction service and request schemas.
+- [airflow/](airflow/) - DAGs for batch data, batch predictions, model training, and drift monitoring.
+- [dashboard/](dashboard/) - Streamlit monitoring and research dashboard.
+- [docker/](docker/) - container images for the API, Airflow, Spark, dashboard, and stream producer.
+- [models/](models/) - data loading, feature engineering, training, evaluation, inference, and registry helpers.
+- [pipelines/](pipelines/) - batch and streaming ingestion jobs, Spark jobs, schemas, storage, and validation.
+- [configs/](configs/) - YAML configuration for data, Kafka, Spark, and model settings.
+- [delta/](delta/) - local Delta Lake storage for raw, bronze, silver, gold, predictions, checkpoints, and state.
+- [scripts/](scripts/) - thin launch scripts for local development.
+- [docs/](docs/) - architecture, commands, and data documentation.
 
-## Current flow
+## Runtime Flow
 
-1. Historical backfill or the Render WebSocket proxy collects Binance candles.
-2. [pipelines/ingestion](pipelines/ingestion/) normalizes raw rows into Bronze.
-3. [pipelines/transformers](pipelines/transformers/) cleans and standardizes the data into Silver.
-4. [pipelines/transformers/gold](pipelines/transformers/gold/) builds model-ready features.
-5. [models/](models/) trains, evaluates, and saves local artifacts.
-6. [pipelines/jobs/batch](pipelines/jobs/batch/) and [pipelines/jobs/streaming](pipelines/jobs/streaming/) persist model predictions into Delta.
-7. [api/](api/) loads the saved model for online prediction.
-8. [dashboard/](dashboard/) renders the Streamlit observability UI.
+1. Batch ingestion jobs fetch historical Binance data and normalize it into the raw and bronze layers.
+2. Streaming ingestion publishes live market data into Kafka, then Spark Structured Streaming writes it into the same Delta contracts.
+3. Transformation jobs clean, enrich, and promote the data into silver and gold tables.
+4. Training jobs consume the gold feature contract to build and save model artifacts.
+5. Prediction jobs and the FastAPI service reuse the saved artifacts for online and batch scoring.
+6. Airflow coordinates batch data, batch predictions, training, and drift monitoring workflows.
+7. The dashboard surfaces drift history, model metrics from MLflow, and retraining state.
 
-## Run locally
+## Local Stack
 
-- Batch pipeline: `python scripts/run_batch.py`
-- Prediction API: `./scripts/run_api.sh`
-- Streamlit dashboard: `streamlit run dashboard/app.py`
-- Containerized dashboard: `docker compose up dashboard`
+The canonical local setup is the compose stack defined in [docker-compose.yml](docker-compose.yml). It brings up Kafka, topic initialization, the stream producer, Spark streaming and prediction jobs, FastAPI, Streamlit, Airflow, PostgreSQL, and MLflow.
+
+Start the stack with:
+
+```bash
+docker compose up
+```
+
+Useful entry points:
+
+```bash
+./scripts/run_api.sh
+streamlit run dashboard/app.py
+```
+
+For operational commands, resets, and service-specific checks, use [docs/commands.md](docs/commands.md).
 
 ## Documentation
 
 - [Architecture](docs/architecture.md)
-- [Prometheus](docs/prometheus.md)
-- [Pipelines](pipelines/README.md)
+- [Commands](docs/commands.md)
 - [API](api/README.md)
+- [Airflow](airflow/README.md)
+- [Dashboard](dashboard/README.md)
+- [Pipelines](pipelines/README.md)
 - [Models](models/README.md)
-- [Dashboard](dashboard/README.md)
-- [Dashboard](dashboard/README.md)
+- [Configs](configs/README.md)
+- [Scripts](scripts/README.md)
 
-## Containerized dashboard
-
-The dashboard now has a dedicated Docker image for CI/CD and compose-based deployment.
-
-Build it directly with:
-
-```bash
-docker build -f docker/dashboard/Dockerfile -t cryptoquant-dashboard .
-```
-
-Run it with the stack:
-
-```bash
-docker compose up dashboard
-```
-
-The container exposes Streamlit on port `8501` and connects to Prometheus and MLflow through the compose network.
-
-## Design goals
+## Design Goals
 
 - Keep batch and streaming paths aligned around the same Bronze/Silver/Gold contracts.
-- Treat feature generation as a reusable boundary between training and serving.
-- Leave room for Airflow orchestration, model registry integration, drift monitoring, and multi-exchange expansion.
+- Treat feature generation as the reusable boundary between training and serving.
+- Keep orchestration, observability, and serving concerns separated so the stack can grow without coupling the runtime paths.

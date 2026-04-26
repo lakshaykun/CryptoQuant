@@ -1,11 +1,13 @@
 # docker-compose.yml
 
 x-spark-base: &spark-base
-  image: lakshaykun/crypto-spark:latest
+  build:
+    dockerfile: docker/spark/Dockerfile
   environment:
     - PYTHONPATH=/opt/app
     - PATH=/opt/spark/bin:$PATH
     - MLFLOW_TRACKING_URI=http://mlflow:5000
+    - PREDICTION_API_URL=http://api:8000/predict
   volumes:
     - .:/opt/app
     - spark-ivy:/root/.ivy2
@@ -41,69 +43,41 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
 
-  topic-init:
+  kafka-init:
     image: apache/kafka:3.7.0
     depends_on:
       - kafka
-    command: |
-      sh -c '
-      echo "Waiting for Kafka to be ready..."
-
-      until nc -z kafka 9092; do
-        sleep 2
-      done
-
-      until /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --list; do
-        sleep 2
-      done
-
-      echo "Kafka is ready. Creating topic..."
-
-      /opt/kafka/bin/kafka-topics.sh --create --if-not-exists \
-        --topic crypto_prices \
-        --bootstrap-server kafka:9092 \
-        --partitions 3 \
-        --replication-factor 1
-
-      echo "Done!"
-      '
-
-  kafka-exporter:
-    image: danielqsj/kafka-exporter:v1.8.0
-    depends_on:
-      - kafka
-    command:
-      - --kafka.server=kafka:9092
-    ports:
-      - "9308:9308"
+    volumes:
+      - ./docker/kafka/init.sh:/init.sh
+    entrypoint: ["/bin/bash", "/init.sh"]
 
 
   # =========================
   # 🟠 STREAM PRODUCER
   # =========================
   stream-producer:
-    image: lakshaykun/stream-producer:latest
+    build:
+      dockerfile: docker/stream-producer/Dockerfile
     command: python pipelines/ingestion/streaming/jobs/crypto_stream_job.py
     restart: always
     depends_on:
       - kafka
-      - topic-init
+      - kafka-init
     volumes:
       - .:/opt/app
 
   dashboard:
-    image: lakshaykun/crypto-dashboard:latest
+    build:
+      dockerfile: docker/dashboard/Dockerfile
     working_dir: /opt/app
     depends_on:
       - mlflow
-      - prometheus
     environment:
       - PYTHONPATH=/opt/app
       - STREAMLIT_SERVER_ADDRESS=0.0.0.0
       - STREAMLIT_SERVER_HEADLESS=true
       - STREAMLIT_SERVER_PORT=8501
       - STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
-      - DEFAULT_PROMETHEUS_URL=http://prometheus:9090
       - MLFLOW_TRACKING_URI=http://mlflow:5000
     volumes:
       - .:/opt/app
@@ -112,7 +86,8 @@ services:
     command: streamlit run dashboard/app.py --server.address 0.0.0.0 --server.port 8501
 
   api:
-    image: lakshaykun/crypto-api:latest
+    build:
+      dockerfile: docker/api/Dockerfile
     working_dir: /opt/app
     command: uvicorn api.app:app --host 0.0.0.0 --port 8000 --reload
     restart: unless-stopped
@@ -135,17 +110,15 @@ services:
     command: >
       spark-submit
       --master local[2]
-      --packages io.delta:delta-spark_2.12:3.0.0,org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0
-      --conf spark.ui.prometheus.enabled=true
-      --conf spark.ui.port=4040
+      --driver-memory 512m
+      --executor-memory 512m
+      --packages io.delta:delta-spark_2.12:3.1.0,org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0
       --conf spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension
       --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog
       /opt/app/pipelines/jobs/streaming/spark_streaming.py
     depends_on:
+      - api
       - stream-producer
-      - pushgateway
-    ports:
-      - "4040:4040"
     restart: always
 
   spark-predictions:
@@ -153,23 +126,19 @@ services:
     working_dir: /opt/app
     command: >
       spark-submit
-      --master local[2]
-      --driver-memory 1g
-      --executor-memory 1g
+      --master local[1]
+      --driver-memory 512m
+      --executor-memory 512m
       --conf spark.executor.cores=1
       --conf spark.driver.maxResultSize=512m
-      --packages io.delta:delta-spark_2.12:3.0.0
-      --conf spark.ui.prometheus.enabled=true
-      --conf spark.ui.port=4040
+      --packages io.delta:delta-spark_2.12:3.1.0
       --conf spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension
       --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog
       /opt/app/pipelines/jobs/streaming/spark_predictions.py
     depends_on:
+      - api
       - spark-streaming
       - mlflow
-      - pushgateway
-    ports:
-      - "4041:4040"
     restart: always
   
   spark:
@@ -203,7 +172,6 @@ services:
       - spark
       - postgres
       - mlflow
-      - airflow-statsd-exporter
     ports:
       - "8080:8080"
     environment:
@@ -213,10 +181,6 @@ services:
       - AIRFLOW__CORE__DAGS_FOLDER=/opt/app/airflow/dags
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
       - AIRFLOW__API__AUTH_BACKENDS=airflow.api.auth.backend.basic_auth
-      - AIRFLOW__METRICS__STATSD_ON=True
-      - AIRFLOW__METRICS__STATSD_HOST=airflow-statsd-exporter
-      - AIRFLOW__METRICS__STATSD_PORT=9125
-      - AIRFLOW__METRICS__STATSD_PREFIX=airflow
       - PYTHONPATH=/opt/app
     volumes:
       - airflow-home:/opt/airflow
@@ -232,7 +196,6 @@ services:
     user: "0:0"
     depends_on:
       - airflow-webserver
-      - airflow-statsd-exporter
     environment:
       - AIRFLOW_HOME=/opt/airflow
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
@@ -243,10 +206,7 @@ services:
       - AIRFLOW__SCHEDULER__MAX_THREADS=2
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
       - AIRFLOW__API__AUTH_BACKENDS=airflow.api.auth.backend.basic_auth
-      - AIRFLOW__METRICS__STATSD_ON=True
-      - AIRFLOW__METRICS__STATSD_HOST=airflow-statsd-exporter
-      - AIRFLOW__METRICS__STATSD_PORT=9125
-      - AIRFLOW__METRICS__STATSD_PREFIX=airflow
+      - TRIGGER_INGEST_ON_START=true
       - PYTHONPATH=/opt/app
     volumes:
       - airflow-home:/opt/airflow
@@ -274,58 +234,6 @@ services:
     volumes:
       - mlflow-data:/mlflow
 
-  airflow-statsd-exporter:
-    image: prom/statsd-exporter:v0.26.1
-    ports:
-      - "9102:9102"
-      - "9125:9125/udp"
-
-  pushgateway:
-    image: prom/pushgateway:v1.8.0
-    ports:
-      - "9091:9091"
-
-  node-exporter:
-    image: prom/node-exporter:v1.8.1
-    command:
-      - "--path.rootfs=/host"
-    volumes:
-      - "/:/host:ro,rslave"
-    ports:
-      - "9100:9100"
-
-  cadvisor:
-    image: gcr.io/cadvisor/cadvisor:v0.49.1
-    privileged: true
-    devices:
-      - /dev/kmsg
-    volumes:
-      - /:/rootfs:ro
-      - /var/run:/var/run:rw
-      - /sys:/sys:ro
-      - /var/lib/docker/:/var/lib/docker:ro
-    ports:
-      - "8088:8080"
-
-  prometheus:
-    image: prom/prometheus:v2.53.0
-    command:
-      - "--config.file=/etc/prometheus/prometheus.yml"
-      - "--web.enable-lifecycle"
-    depends_on:
-      - api
-      - node-exporter
-      - cadvisor
-      - kafka-exporter
-      - pushgateway
-      - airflow-statsd-exporter
-    volumes:
-      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./monitoring/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
-      - prometheus-data:/prometheus
-    ports:
-      - "9090:9090"
-
 # =========================
 # 📦 VOLUMES
 # =========================
@@ -336,4 +244,3 @@ volumes:
   spark-ivy:
   airflow-logs:
   mlflow-data:
-  prometheus-data:

@@ -3,7 +3,6 @@
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from datetime import datetime, timedelta
-from monitoring_callbacks import dag_failure_callback, dag_success_callback
 
 
 # Task wrapper functions to avoid import issues in Airflow
@@ -28,8 +27,8 @@ with DAG(
     start_date=datetime(2024, 1, 1),
     schedule=timedelta(minutes=20),
     catchup=False,
-    on_success_callback=dag_success_callback,
-    on_failure_callback=dag_failure_callback,
+    max_active_runs=1,
+    is_paused_upon_creation=False
 ) as dag:
 
     load_data_task = PythonOperator(
