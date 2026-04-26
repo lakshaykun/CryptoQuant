@@ -1,0 +1,42 @@
+batch:
+  start_date: "2026-04-26T00:00:00Z"
+  sources:
+    - telegram
+    - youtube
+    - reddit
+    - news
+  fallback_lookback_minutes: 1440
+  bronze_table: "bronze_sentiment"
+  silver_table: "silver_sentiment"
+  gold_table: "gold_sentiment"
+  bronze_state_layer: "batch_bronze"
+  silver_state_layer: "batch_silver"
+  gold_state_layer: "batch_gold"
+
+streaming:
+  lookback_minutes: 30
+  sources:
+    - telegram
+    - youtube
+    - reddit
+    - news
+  bronze_table: "bronze_streaming_sentiment"
+  silver_table: "silver_streaming_sentiment"
+  gold_table: "gold_streaming_sentiment"
+  bronze_state_layer: "streaming_bronze"
+  silver_state_layer: "streaming_silver"
+  gold_state_layer: "streaming_gold"
+
+query_safety_buffer_minutes: 2
+min_lookback_minutes: 1
+source_aliases:
+  telegram:
+    - telegram
+  youtube:
+    - youtube
+  reddit:
+    - reddit
+  news:
+    - news
+    - rss
+    - cryptopanic_web

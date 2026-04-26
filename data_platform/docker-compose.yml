@@ -2,8 +2,8 @@
 
 services:
   #=========================
-  #🟡 KAFKA
- # =========================
+  # 🟡 KAFKA
+  #=========================
   kafka:
     image: apache/kafka:3.7.0
     container_name: crypto-kafka
@@ -83,6 +83,8 @@ services:
       - postgres-db-volume:/var/lib/postgresql/data
   
   airflow-webserver:
+    env_file:
+      - ../.env
     build:
       dockerfile: docker/airflow/Dockerfile
     container_name: airflow-webserver
@@ -100,6 +102,9 @@ services:
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
       - AIRFLOW__CORE__DAGS_FOLDER=/opt/app/airflow/dags
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+      - AIRFLOW__WEBSERVER__BASE_URL=http://localhost:8080 
+      - AIRFLOW__WEBSERVER__ENABLE_PROXY_FIX=True             
+      - AIRFLOW__LOGGING__BASE_LOG_FOLDER=/opt/airflow/logs   
       - PYTHONPATH=/opt/app
     volumes:
       - airflow-home:/opt/airflow
@@ -109,6 +114,8 @@ services:
     command: webserver
 
   airflow-scheduler:
+    env_file:
+      - ../.env
     build:
       dockerfile: docker/airflow/Dockerfile
     container_name: airflow-scheduler
@@ -122,6 +129,9 @@ services:
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
       - AIRFLOW__CORE__DAGS_FOLDER=/opt/app/airflow/dags
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+      - AIRFLOW__WEBSERVER__BASE_URL=http://localhost:8080   
+      - AIRFLOW__WEBSERVER__ENABLE_PROXY_FIX=True           
+      - AIRFLOW__LOGGING__BASE_LOG_FOLDER=/opt/airflow/logs  
       - PYTHONPATH=/opt/app
     volumes:
       - airflow-home:/opt/airflow
@@ -159,7 +169,7 @@ services:
     image: ghcr.io/mlflow/mlflow:latest
     container_name: mlflow
     ports:
-      - "5000:5000"
+      - "5001:5000"
     environment:
       - MLFLOW_SERVER_ALLOWED_HOSTS=*
     command: >

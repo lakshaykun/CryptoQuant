@@ -39,6 +39,27 @@ This package contains the data movement and transformation layer for CryptoQuant
 	- `pipelines/ingestion/streaming/sources/sentiment/news/` - RSS and CryptoPanic fetch logic.
 	- `pipelines/ingestion/streaming/sources/sentiment/telegram/` - Telethon channel ingestion and symbol-aware filtering.
 
+## Sentiment Batch Pipeline
+
+- Full historical catch-up from last ingested state to Gold:
+	- `python -m pipelines.jobs.batch.sentiment --stage all --mode batch`
+- Streaming-style catch-up (last X minutes from config) to Gold:
+	- `python -m pipelines.jobs.batch.sentiment --stage all --mode streaming`
+- Run only a single stage:
+	- `python -m pipelines.jobs.batch.sentiment --stage ingest --mode batch`
+	- `python -m pipelines.jobs.batch.sentiment --stage silver`
+	- `python -m pipelines.jobs.batch.sentiment --stage gold`
+- Configure ingestion windows in:
+	- `configs/data.yaml` -> `sentiment.batch_default_lookback_minutes`
+	- `configs/data.yaml` -> `sentiment.streaming_lookback_minutes`
+
+## Sentiment Governance
+
+- Bronze: normalized source payloads, event-time/date checks, dedupe by `id+source+symbol`.
+- Silver: cleaned text + event-time quality gates, partitioned by `source/symbol/event_date`.
+- Gold: CryptoBERT sentiment inference + window aggregation (inference moved from Silver to Gold).
+- State: `sentiment_state` table tracks `layer/source/symbol -> last_processed_time` for both batch and streaming.
+
 ## Ingestion Metrics
 
 - Show per-minute ingested rows for Bronze, Silver, and Gold Delta tables (default last 60 minutes):

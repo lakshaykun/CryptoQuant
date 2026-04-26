@@ -15,7 +15,6 @@ def create_delta_spark_session(
 	app_name: str,
 	include_kafka: bool = False,
 	master: str | None = None,
-	spark_conf: dict[str, str] | None = None,
 ) -> SparkSession:
 	# Keep driver and worker Python versions aligned for PySpark UDF execution.
 
@@ -33,9 +32,6 @@ def create_delta_spark_session(
 		.config("spark.pyspark.driver.python", python_exec)
 		.config("spark.executorEnv.PYSPARK_PYTHON", python_exec)
 	)
-	if spark_conf:
-		for key, value in spark_conf.items():
-			builder = builder.config(str(key), str(value))
 	extra_packages: list[str] = []
 
 	if include_kafka:

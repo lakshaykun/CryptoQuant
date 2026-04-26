@@ -16,21 +16,21 @@ class GoldSentimentTransformer:
             "event_time",
             "symbol",
             weighted_col.alias("weighted_sentiment"),
-            "engagement",
             confidence_col.alias("confidence"),
         )
+        grouped = compact.groupBy(
+            F.window(F.col("event_time"), window_duration),
+            F.col("symbol"),
+        )
 
-        return (
-            compact
-            .withWatermark("event_time", watermark_duration)
-            .groupBy(
+        if compact.isStreaming:
+            grouped = compact.withWatermark("event_time", watermark_duration).groupBy(
                 F.window(F.col("event_time"), window_duration),
                 F.col("symbol"),
             )
-            .agg(
-                F.avg("weighted_sentiment").alias("sentiment_index"),
-                F.sum("engagement").alias("total_engagement"),
-                F.avg("confidence").alias("avg_confidence"),
-                F.count("*").alias("message_count"),
-            )
+
+        return grouped.agg(
+            F.avg("weighted_sentiment").alias("sentiment_index"),
+            F.avg("confidence").alias("avg_confidence"),
+            F.count("*").alias("message_count"),
         )

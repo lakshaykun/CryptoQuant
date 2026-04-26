@@ -1,7 +1,8 @@
 import asyncio
 import logging
 import os
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+
 from pathlib import Path
 from typing import Any
 
@@ -141,9 +142,9 @@ def _build_message_event(
 
     sent_at = getattr(message, "date", None)
     if isinstance(sent_at, datetime):
-        timestamp = sent_at.astimezone(UTC).isoformat()
+        timestamp = sent_at.astimezone(timezone.utc).isoformat()
     else:
-        timestamp = datetime.now(UTC).isoformat()
+        timestamp = datetime.now(timezone.utc).isoformat()
 
     views = max(0, int(getattr(message, "views", 0) or 0))
     forwards = max(0, int(getattr(message, "forwards", 0) or 0))
@@ -202,7 +203,10 @@ async def _fetch_events_for_symbol(
     return symbol_events
 
 
-async def _fetch_telegram_events_async() -> list[dict[str, Any]]:
+async def _fetch_telegram_events_async(
+    lookback_minutes: int | None = None,
+    emit_current_timestamp: bool = True,
+) -> list[dict[str, Any]]:
     client = _build_client()
     if client is None:
         return []
@@ -233,15 +237,33 @@ async def _fetch_telegram_events_async() -> list[dict[str, Any]]:
     finally:
         await client.disconnect()
 
-    return apply_ingestion_policies(all_events, lookback_hours=lookback_hours)
+    return apply_ingestion_policies(
+        all_events,
+        lookback_hours=lookback_hours,
+        lookback_minutes=lookback_minutes,
+        emit_current_timestamp=emit_current_timestamp,
+    )
 
 
-def fetch_telegram_events() -> list[dict[str, Any]]:
+def fetch_telegram_events(
+    lookback_minutes: int | None = None,
+    emit_current_timestamp: bool = True,
+) -> list[dict[str, Any]]:
     try:
-        return asyncio.run(_fetch_telegram_events_async())
+        return asyncio.run(
+            _fetch_telegram_events_async(
+                lookback_minutes=lookback_minutes,
+                emit_current_timestamp=emit_current_timestamp,
+            )
+        )
     except RuntimeError:
         loop = asyncio.new_event_loop()
         try:
-            return loop.run_until_complete(_fetch_telegram_events_async())
+            return loop.run_until_complete(
+                _fetch_telegram_events_async(
+                    lookback_minutes=lookback_minutes,
+                    emit_current_timestamp=emit_current_timestamp,
+                )
+            )
         finally:
             loop.close()

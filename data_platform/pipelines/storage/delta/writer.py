@@ -1,8 +1,10 @@
 # pipelines/storage/delta/writer.py
 
 from typing import Optional
+import time
 
 from pyspark.sql import DataFrame
+from pyspark.sql import functions as F
 from pyspark.sql.types import StructType
 
 from utils_global.logger import get_logger
@@ -26,7 +28,9 @@ def write_batch(
     expected_schema: StructType,
     mode: str = "append",
     merge_schema: bool = False,
-    upsert: bool = True
+    upsert: bool = True,
+    merge_condition: str | None = None,
+    optimize_partitions: bool = False,
 ):
     try:
         table_config = get_table_config(table_name, CONFIG)
@@ -44,18 +48,21 @@ def write_batch(
 
         partition_cols = table_config.get("partition_by")
         validate_partitions(df, partition_cols)
+        if partition_cols and optimize_partitions:
+            df = df.repartition(*[F.col(partition) for partition in partition_cols])
 
         # ---------------------------
         # UPSERT LOGIC
         # ---------------------------
         if upsert and DeltaTable.isDeltaTable(df.sparkSession, path):
             delta_table = DeltaTable.forPath(df.sparkSession, path)
+            condition = merge_condition or "t.symbol = s.symbol AND t.open_time = s.open_time"
 
             (
                 delta_table.alias("t")
                 .merge(
                     df.alias("s"),
-                    "t.symbol = s.symbol AND t.open_time = s.open_time"
+                    condition,
                 )
                 .whenMatchedUpdateAll()
                 .whenNotMatchedInsertAll()
@@ -72,8 +79,19 @@ def write_batch(
 
             if merge_schema:
                 writer = writer.option("mergeSchema", "true")
-
-            writer.save(path)
+            last_error = None
+            for attempt in range(1, 4):
+                try:
+                    writer.save(path)
+                    last_error = None
+                    break
+                except Exception as write_error:
+                    last_error = write_error
+                    if attempt == 3:
+                        raise
+                    time.sleep(0.5 * attempt)
+            if last_error is not None:
+                raise last_error
 
             logger.info(f"[{table_name}] Initial write successful → {path}")
 

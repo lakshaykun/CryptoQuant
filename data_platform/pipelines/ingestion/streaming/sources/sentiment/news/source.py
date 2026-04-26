@@ -2,7 +2,7 @@ import concurrent.futures
 import hashlib
 import logging
 import time
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from bs4 import BeautifulSoup
@@ -111,12 +111,12 @@ def _entry_id(entry: dict[str, Any], prefix: str = "") -> str:
 
 
 def _entry_datetime(entry: dict[str, Any]) -> datetime:
-    now = datetime.now(UTC)
+    now = datetime.now(timezone.utc)
     for key in ("published_parsed", "updated_parsed"):
         parsed = entry.get(key)
         if parsed:
             try:
-                return datetime.fromtimestamp(time.mktime(parsed), tz=UTC)
+                return datetime.fromtimestamp(time.mktime(parsed), tz=timezone.utc)
             except (TypeError, ValueError, OverflowError):
                 continue
     for key in ("published", "updated", "published_at"):
@@ -127,7 +127,7 @@ def _entry_datetime(entry: dict[str, Any]) -> datetime:
         if text.endswith("Z"):
             text = text[:-1] + "+00:00"
         try:
-            return datetime.fromisoformat(text).astimezone(UTC)
+            return datetime.fromisoformat(text).astimezone(timezone.utc)
         except ValueError:
             continue
     return now
@@ -146,7 +146,7 @@ def _calculate_signals(
     comment_count: int,
     signal_keywords: list[str],
 ) -> dict[str, float]:
-    now = datetime.now(UTC)
+    now = datetime.now(timezone.utc)
     age_hours = max(0.0, (now - published_dt).total_seconds() / 3600.0)
     recency_points = max(0.0, 100.0 - min(age_hours, 72.0) * (100.0 / 72.0))
     return {
@@ -209,7 +209,7 @@ def _scrape_cryptopanic_for_symbol(
                 link = f"https://cryptopanic.com{link}"
 
             time_tag = row.find("time")
-            published_at = time_tag.get("datetime") if time_tag else datetime.now(UTC).isoformat()
+            published_at = time_tag.get("datetime") if time_tag else datetime.now(timezone.utc).isoformat()
 
             votes_tag = row.find("span", class_="nc-votes-count")
             engagement_count = 1
@@ -300,7 +300,7 @@ def _process_rss_feed_for_symbol(
 
         event = {
             "id": _entry_id(entry, prefix=f"{symbol}_"),
-            "timestamp": entry.get("published") or entry.get("updated") or datetime.now(UTC).isoformat(),
+            "timestamp": entry.get("published") or entry.get("updated") or datetime.now(timezone.utc).isoformat(),
             "source": "rss",
             "text": text,
             "engagement": 1,
@@ -374,7 +374,10 @@ def _fetch_news_events_for_symbol(
 
 # ─── Public entry-point ───────────────────────────────────────────────────────
 
-def fetch_news_events() -> list[dict[str, Any]]:
+def fetch_news_events(
+    lookback_minutes: int | None = None,
+    emit_current_timestamp: bool = True,
+) -> list[dict[str, Any]]:
     """Fetch news / RSS events for ALL configured symbols and return a combined event list.
 
     Each event carries a ``symbol`` field (e.g. ``'BTC'``, ``'ETH'``) so that
@@ -392,4 +395,10 @@ def fetch_news_events() -> list[dict[str, Any]]:
         logger.info("  -> fetched %d raw events for %s", len(symbol_events), symbol)
         all_events.extend(symbol_events)
 
-    return apply_ingestion_policies(all_events, lookback_hours=lookback_hours)
+    return apply_ingestion_policies(
+        all_events,
+        lookback_hours=lookback_hours,
+        lookback_minutes=lookback_minutes,
+        emit_current_timestamp=emit_current_timestamp,
+    )
+    

@@ -35,17 +35,6 @@ STAGE_LABELS=(
   "telegram"
 )
 
-STAGE_MODULES=(
-  ""
-  "pipelines.jobs.streaming.bronze.kafka_to_delta"
-  "pipelines.jobs.streaming.silver.clean_merge_stream"
-  "pipelines.jobs.streaming.gold.sentiment_enrichment"
-  "pipelines.ingestion.streaming.sentiment.reddit_stream_job"
-  "pipelines.ingestion.streaming.sentiment.youtube_stream_job"
-  "pipelines.ingestion.streaming.sentiment.news_stream_job"
-  "pipelines.ingestion.streaming.sentiment.telegram_stream_job"
-)
-
 SPARK_APP_NAMES=(
   "btc-sentiment-platform-bronze"
   "btc-sentiment-platform-silver"
@@ -260,117 +249,50 @@ ensure_kafka_topics() {
       --partitions 3 \
       --replication-factor 1 >/dev/null
   done
-
-  local listed_topics
-  listed_topics="$(docker exec crypto-kafka /opt/kafka/bin/kafka-topics.sh --list --bootstrap-server "${bootstrap}" || true)"
-
-  for topic in "${KAFKA_TOPICS[@]}"; do
-    if ! grep -qx "${topic}" <<<"${listed_topics}"; then
-      echo "Kafka topic verification failed: missing '${topic}'" >&2
-      return 1
-    fi
-  done
 }
 
-run_bootstrap_ingestion_cycle() {
-  echo "Running one-shot ingestion bootstrap cycle (reddit/youtube/news/telegram)..."
-
-  # Run all four producers in parallel and wait for all to complete.
-  local pids=()
-  (cd "${ROOT_DIR}" && ENV=host PYTHONPATH="${ROOT_DIR}" python3 -m "pipelines.ingestion.streaming.sentiment.reddit_stream_job" --once) &
-  pids+=($!)
-  (cd "${ROOT_DIR}" && ENV=host PYTHONPATH="${ROOT_DIR}" python3 -m "pipelines.ingestion.streaming.sentiment.youtube_stream_job" --once) &
-  pids+=($!)
-  (cd "${ROOT_DIR}" && ENV=host PYTHONPATH="${ROOT_DIR}" python3 -m "pipelines.ingestion.streaming.sentiment.news_stream_job" --once) &
-  pids+=($!)
-  (cd "${ROOT_DIR}" && ENV=host PYTHONPATH="${ROOT_DIR}" python3 -m "pipelines.ingestion.streaming.sentiment.telegram_stream_job" --once) &
-  pids+=($!)
-
-  local failed=0
-  for pid in "${pids[@]}"; do
-    if ! wait "${pid}"; then
-      echo "Warning: one bootstrap ingestion job (PID ${pid}) exited with a non-zero status." >&2
-      failed=1
-    fi
-  done
-
-  if [[ "${failed}" -eq 0 ]]; then
-    echo "Bootstrap ingestion cycle complete."
-  fi
-}
-
-wait_for_initial_data_cycle() {
-  local timeout_seconds=240
-  local waited=0
-  local delta_root="${ROOT_DIR}/delta"
-  local bronze_dir="${delta_root}/bronze"
-  local silver_dir="${delta_root}/silver"
-  local gold_dir="${delta_root}/gold"
-  local gold_realtime_csv="${delta_root}/gold_sentiment_realtime.csv"
-
-  while (( waited < timeout_seconds )); do
-    local bronze_ready=0
-    local silver_ready=0
-    local gold_ready=0
-    local csv_ready=0
-
-    if [[ -d "${bronze_dir}" ]] && find "${bronze_dir}" -type f -name "*.parquet" | grep -q .; then
-      bronze_ready=1
-    fi
-
-    if [[ -d "${silver_dir}" ]] && find "${silver_dir}" -type f -name "*.parquet" | grep -q .; then
-      silver_ready=1
-    fi
-
-    if [[ -d "${gold_dir}" ]] && find "${gold_dir}" -type f -name "*.parquet" | grep -q .; then
-      gold_ready=1
-    fi
-
-    if [[ -f "${gold_realtime_csv}" ]] && [[ "$(wc -l < "${gold_realtime_csv}" | tr -d ' ')" -gt 1 ]]; then
-      csv_ready=1
-    fi
-
-    if (( bronze_ready == 1 && silver_ready == 1 && gold_ready == 1 && csv_ready == 1 )); then
-      echo "Initial bootstrap cycle complete: bronze/silver/gold and realtime CSV are initialized."
+is_valid_stage() {
+  local stage="$1"
+  local label
+  for label in "${STAGE_LABELS[@]}"; do
+    if [[ "${label}" == "${stage}" ]]; then
       return 0
     fi
-
-    sleep 5
-    waited=$((waited + 5))
   done
-
-  echo "Timed out waiting for initial bronze/silver/gold bootstrap cycle." >&2
   return 1
 }
 
-start_stage() {
+stage_command() {
   local label="$1"
-  local module="$2"
-  local logfile="${LOG_DIR}/${label}.log"
-  local pidfile="${PID_DIR}/${label}.pid"
-
-  if [[ -f "${pidfile}" ]]; then
-    local existing_pid
-    existing_pid="$(cat "${pidfile}")"
-    if [[ -n "${existing_pid}" ]] && kill -0 "${existing_pid}" 2>/dev/null; then
-      echo "Stage '${label}' is already running with PID ${existing_pid}."
-      return 0
-    fi
-  fi
-
-  echo "Starting stage: ${label}"
-  nohup bash -c "cd \"${ROOT_DIR}\" && ENV=host PYTHONPATH=\"${ROOT_DIR}\" python3 -m \"${module}\"" >"${logfile}" 2>&1 &
-  local pid=$!
-  echo "${pid}" >"${pidfile}"
-
-  sleep 5
-  if ! kill -0 "${pid}" 2>/dev/null; then
-    echo "Stage '${label}' failed to start. Last log lines:" >&2
-    tail -n 40 "${logfile}" >&2 || true
-    return 1
-  fi
-
-  echo "Stage '${label}' started with PID ${pid}."
+  case "${label}" in
+    cryptobert_api)
+      echo "ENV=host API_RELOAD=false PYTHONPATH=\"${ROOT_DIR}\" ./scripts/run_api.sh"
+      ;;
+    kafka_to_delta)
+      echo "ENV=host PYTHONPATH=\"${ROOT_DIR}\" python3 -m pipelines.jobs.streaming.bronze.kafka_to_delta"
+      ;;
+    silver)
+      echo "ENV=host PYTHONPATH=\"${ROOT_DIR}\" python3 -m pipelines.jobs.streaming.silver.clean_merge_stream"
+      ;;
+    gold)
+      echo "ENV=host PYTHONPATH=\"${ROOT_DIR}\" python3 -m pipelines.jobs.streaming.gold.sentiment_enrichment"
+      ;;
+    reddit)
+      echo "ENV=host PYTHONPATH=\"${ROOT_DIR}\" python3 -m pipelines.ingestion.streaming.sentiment.reddit_stream_job"
+      ;;
+    youtube)
+      echo "ENV=host PYTHONPATH=\"${ROOT_DIR}\" python3 -m pipelines.ingestion.streaming.sentiment.youtube_stream_job"
+      ;;
+    news)
+      echo "ENV=host PYTHONPATH=\"${ROOT_DIR}\" python3 -m pipelines.ingestion.streaming.sentiment.news_stream_job"
+      ;;
+    telegram)
+      echo "ENV=host PYTHONPATH=\"${ROOT_DIR}\" python3 -m pipelines.ingestion.streaming.sentiment.telegram_stream_job"
+      ;;
+    *)
+      echo ""
+      ;;
+  esac
 }
 
 start_stage_command() {
@@ -403,6 +325,31 @@ start_stage_command() {
   echo "Stage '${label}' started with PID ${pid}."
 }
 
+start_individual_process() {
+  local label="$1"
+  if ! is_valid_stage "${label}"; then
+    echo "Unknown stage: ${label}" >&2
+    usage
+    exit 1
+  fi
+
+  local command
+  command="$(stage_command "${label}")"
+  if [[ -z "${command}" ]]; then
+    echo "No command mapped for stage '${label}'." >&2
+    exit 1
+  fi
+
+  start_stage_command "${label}" "${command}"
+}
+
+start_combined_process() {
+  local label
+  for label in "${STAGE_LABELS[@]}"; do
+    start_individual_process "${label}"
+  done
+}
+
 stop_stage() {
   local label="$1"
   local pidfile="${PID_DIR}/${label}.pid"
@@ -426,23 +373,43 @@ stop_stage() {
   rm -f "${pidfile}"
 }
 
+stop_individual_process() {
+  local label="$1"
+  if ! is_valid_stage "${label}"; then
+    echo "Unknown stage: ${label}" >&2
+    usage
+    exit 1
+  fi
+  stop_stage "${label}"
+}
+
+stop_combined_process() {
+  local i
+  for (( i=${#STAGE_LABELS[@]}-1; i>=0; i-- )); do
+    stop_stage "${STAGE_LABELS[$i]}"
+  done
+}
+
 cleanup_orphan_stage_processes() {
+  local patterns=(
+    "uvicorn api.app:app"
+    "pipelines.jobs.streaming.bronze.kafka_to_delta"
+    "pipelines.jobs.streaming.silver.clean_merge_stream"
+    "pipelines.jobs.streaming.gold.sentiment_enrichment"
+    "pipelines.ingestion.streaming.sentiment.reddit_stream_job"
+    "pipelines.ingestion.streaming.sentiment.youtube_stream_job"
+    "pipelines.ingestion.streaming.sentiment.news_stream_job"
+    "pipelines.ingestion.streaming.sentiment.telegram_stream_job"
+  )
+
   local found=0
-  local module
-  for module in "${STAGE_MODULES[@]}"; do
-    if [[ -z "${module}" ]]; then
-      continue
-    fi
-    if pgrep -f "${module}" >/dev/null 2>&1; then
+  local pattern
+  for pattern in "${patterns[@]}"; do
+    if pgrep -f "${pattern}" >/dev/null 2>&1; then
       found=1
-      pkill -f "${module}" || true
+      pkill -f "${pattern}" || true
     fi
   done
-
-  if pgrep -f "uvicorn api.app:app" >/dev/null 2>&1; then
-    found=1
-    pkill -f "uvicorn api.app:app" || true
-  fi
 
   local app_name
   for app_name in "${SPARK_APP_NAMES[@]}"; do
@@ -458,8 +425,15 @@ cleanup_orphan_stage_processes() {
 }
 
 status_pipeline() {
+  local target="${1:-all}"
   echo "Pipeline status:"
+
+  local label
   for label in "${STAGE_LABELS[@]}"; do
+    if [[ "${target}" != "all" && "${target}" != "${label}" ]]; then
+      continue
+    fi
+
     local pidfile="${PID_DIR}/${label}.pid"
     if [[ -f "${pidfile}" ]]; then
       local pid
@@ -498,14 +472,13 @@ check_pipeline() {
   echo "All checks passed."
 }
 
-start_pipeline() {
+prepare_runtime() {
   mkdir -p "${LOG_DIR}" "${PID_DIR}"
   activate_venv_if_present
 
   require_command python3
   require_command docker
   check_python_compatibility
-
   check_required_files
   check_python_syntax
   check_compose_config
@@ -518,42 +491,44 @@ start_pipeline() {
   docker compose -f "${COMPOSE_FILE}" up -d kafka topic-init
   wait_for_kafka
   ensure_kafka_topics
+}
 
-  # Keep CryptoBERT API lifecycle separate from Airflow by running it directly.
-  start_stage_command "${STAGE_LABELS[0]}" "ENV=host API_RELOAD=false PYTHONPATH=\"${ROOT_DIR}\" ./scripts/run_api.sh"
-  start_stage "${STAGE_LABELS[1]}" "${STAGE_MODULES[1]}"
-  start_stage "${STAGE_LABELS[2]}" "${STAGE_MODULES[2]}"
-  start_stage "${STAGE_LABELS[3]}" "${STAGE_MODULES[3]}"
+start_pipeline() {
+  local target="${1:-all}"
+  prepare_runtime
 
-  run_bootstrap_ingestion_cycle
-  wait_for_initial_data_cycle
+  if [[ "${target}" == "all" ]]; then
+    start_combined_process
+  else
+    start_individual_process "${target}"
+  fi
 
-  start_stage "${STAGE_LABELS[4]}" "${STAGE_MODULES[4]}"
-  start_stage "${STAGE_LABELS[5]}" "${STAGE_MODULES[5]}"
-  start_stage "${STAGE_LABELS[6]}" "${STAGE_MODULES[6]}"
-  start_stage "${STAGE_LABELS[7]}" "${STAGE_MODULES[7]}"
-
-  echo "Sentiment pipeline is up."
+  echo "Sentiment pipeline start completed for target: ${target}"
   echo "Logs directory: ${LOG_DIR}"
-  status_pipeline
+  status_pipeline "${target}"
 }
 
 stop_pipeline() {
-  for (( i=${#STAGE_LABELS[@]}-1; i>=0; i-- )); do
-    stop_stage "${STAGE_LABELS[$i]}"
-  done
+  local target="${1:-all}"
+
+  if [[ "${target}" == "all" ]]; then
+    stop_combined_process
+  else
+    stop_individual_process "${target}"
+  fi
 
   cleanup_orphan_stage_processes
 
-  echo "Stopping Kafka services..."
-  docker compose -f "${COMPOSE_FILE}" stop topic-init kafka >/dev/null 2>&1 || true
+  if [[ "${target}" == "all" ]]; then
+    echo "Stopping Kafka services..."
+    docker compose -f "${COMPOSE_FILE}" stop topic-init kafka >/dev/null 2>&1 || true
+  fi
 
-  echo "Sentiment pipeline stopped."
+  echo "Sentiment pipeline stop completed for target: ${target}"
 }
 
 clear_delta_logs() {
   local delta_root="${ROOT_DIR}/delta"
-  local gold_realtime_csv="${delta_root}/gold_sentiment_realtime.csv"
 
   if [[ ! -d "${delta_root}" ]]; then
     echo "Delta directory not found: ${delta_root}"
@@ -561,29 +536,17 @@ clear_delta_logs() {
   fi
 
   echo "Stopping running stages before clearing Delta logs..."
-  stop_pipeline
+  stop_pipeline all
 
-  echo "Removing Delta transaction logs (_delta_log)..."
-  find "${delta_root}" -type d -name "_delta_log" -prune -exec rm -rf {} +
-
-  echo "Clearing all data files from bronze/silver/gold folders..."
-  local layer_dir
-  for layer_dir in "${delta_root}/bronze" "${delta_root}/silver" "${delta_root}/gold"; do
-    if [[ -d "${layer_dir}" ]]; then
-      find "${layer_dir}" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
-    fi
-  done
-
-  echo "Removing all streaming checkpoint directories..."
-  find "${delta_root}" -type d \( -name "checkpoint" -o -name "checkpoints" -o -name "checkpoint_*" -o -name "checkpoints_*" \) -prune -exec rm -rf {} +
-
-  if [[ -f "${gold_realtime_csv}" ]]; then
-    echo "Removing realtime gold CSV: ${gold_realtime_csv}"
-    rm -f "${gold_realtime_csv}"
+  if [[ "${delta_root}" == "/" || -z "${delta_root}" ]]; then
+    echo "Refusing to clear unsafe delta path: ${delta_root}" >&2
+    return 1
   fi
 
-  mkdir -p "${delta_root}/checkpoint"
-  echo "Delta logs cleared under: ${delta_root}"
+  echo "Clearing all files and directories inside: ${delta_root}"
+  find "${delta_root}" -mindepth 1 -exec rm -rf {} +
+
+  echo "Delta directory cleared: ${delta_root}"
 }
 
 clear_data() {
@@ -592,34 +555,44 @@ clear_data() {
 
 usage() {
   cat <<'USAGE'
-Usage: run_pipeline.sh [start|stop|restart|status|check|clear-delta-logs]
+Usage:
+  run_pipeline.sh start [all|stage]
+  run_pipeline.sh stop [all|stage]
+  run_pipeline.sh restart [all|stage]
+  run_pipeline.sh status [all|stage]
+  run_pipeline.sh check
+  run_pipeline.sh clear-delta-logs
+  run_pipeline.sh clear-data
 
-  start    Build image, start Kafka, then start cryptobert_api->bronze->silver->gold->reddit->youtube->news->telegram
-  stop     Stop all sentiment pipeline stages and Kafka container
-  restart  Stop and then start the full sentiment pipeline
-  status   Show running status for each stage and Kafka
-  check    Validate required files, syntax, runtime imports, and compose config
-  clear-delta-logs  Stop pipeline and clear Delta Lake _delta_log and checkpoint logs
-  clear-data  Alias for clear-delta-logs (also clears bronze/silver/gold data files)
+Stages:
+  cryptobert_api | kafka_to_delta | silver | gold | reddit | youtube | news | telegram
+
+Examples:
+  run_pipeline.sh start all
+  run_pipeline.sh start silver
+  run_pipeline.sh stop telegram
+  run_pipeline.sh restart all
+  run_pipeline.sh status gold
 USAGE
 }
 
 main() {
   local action="${1:-start}"
+  local target="${2:-all}"
 
   case "${action}" in
     start)
-      start_pipeline
+      start_pipeline "${target}"
       ;;
     stop)
-      stop_pipeline
+      stop_pipeline "${target}"
       ;;
     restart)
-      stop_pipeline
-      start_pipeline
+      stop_pipeline "${target}"
+      start_pipeline "${target}"
       ;;
     status)
-      status_pipeline
+      status_pipeline "${target}"
       ;;
     check)
       activate_venv_if_present

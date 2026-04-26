@@ -1,14 +1,14 @@
+import time
 import argparse
 from datetime import datetime, timezone
 
 from kafka.errors import KafkaError
 from pipelines.ingestion.streaming.producers.kafka_producer import CryptoProducer
 from pipelines.ingestion.streaming.sentiment.delta_sink import write_events_to_bronze_delta
-from pipelines.ingestion.streaming.sources.sentiment.reddit.source import fetch_reddit_events
+from pipelines.ingestion.streaming.sources.sentiment.youtube.source import fetch_youtube_events
 from utils.config_loader import load_config
 
-
-TOPIC = "btc_reddit"
+TOPIC = "btc_yt"
 
 
 def _streaming_lookback_minutes(default_minutes: int = 30) -> int:
@@ -21,7 +21,7 @@ def _streaming_lookback_minutes(default_minutes: int = 30) -> int:
 
 
 def _dedupe_events(events: list[dict]) -> list[dict]:
-    unique = {}
+    unique: dict[str, dict] = {}
     for event in events:
         event_id = str(event.get("id", "")).strip()
         if not event_id:
@@ -31,56 +31,47 @@ def _dedupe_events(events: list[dict]) -> list[dict]:
 
 
 def run_once() -> int:
-    print("[reddit] starting ingestion...")
-
     events = _dedupe_events(
-        fetch_reddit_events(
-            lookback_minutes=_streaming_lookback_minutes()
-        )
+        fetch_youtube_events(lookback_minutes=_streaming_lookback_minutes())
     )
-
-    print(f"[reddit] fetched events: {len(events)}")
-
     kafka_published = 0
-
     try:
         producer = CryptoProducer()
-
         for event in events:
             producer.send_message(TOPIC, event)
-
         producer.flush()
         producer.close()
-
         kafka_published = len(events)
+    except KafkaError:
+        kafka_published = 0
+    except Exception:
+        kafka_published = 0
 
-    except KafkaError as e:
-        print(f"[reddit][ERROR] Kafka error: {e}")
-        raise  # ❗ important for Airflow
-
-    except Exception as e:
-        print(f"[reddit][ERROR] Unexpected error: {e}")
-        raise  # ❗ do not swallow
-
-    # Delta write
-    try:
-        delta_written = write_events_to_bronze_delta(events)
-    except Exception as e:
-        print(f"[reddit][ERROR] Delta write failed: {e}")
-        raise
-
+    delta_written = write_events_to_bronze_delta(events)
     print(
-        f"[{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')} UTC] "
-        f"reddit: fetched={len(events)} kafka={kafka_published} delta={delta_written}"
+        f"[{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')} UTC] "
+        f"youtube: fetched={len(events)} kafka={kafka_published} delta={delta_written}"
     )
-
     return len(events)
 
 
+def run_forever(interval_seconds: int = 60, stats_queue=None):
+    while True:
+        try:
+            count = run_once()
+        except Exception:
+            count = 0
+        if stats_queue is not None:
+            stats_queue.put(("youtube", count, int(time.time())))
+        time.sleep(interval_seconds)
+
+
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Reddit sentiment ingestion (Airflow-safe)")
-    parser.add_argument("--once", action="store_true", help="Run one ingestion cycle")
+    parser = argparse.ArgumentParser(description="YouTube sentiment Kafka producer")
+    parser.add_argument("--once", action="store_true", help="Fetch and publish one cycle, then exit")
     args = parser.parse_args()
 
-    # Always run once in Airflow
-    run_once()
+    if args.once:
+        run_once()
+    else:
+        run_forever()

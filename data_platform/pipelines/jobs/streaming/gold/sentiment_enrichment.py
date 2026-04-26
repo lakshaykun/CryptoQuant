@@ -14,13 +14,19 @@ from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
 from pyspark.sql import Row
 from pyspark.sql.streaming import StreamingQuery
-from pyspark.sql.types import DoubleType, IntegerType, StringType, StructField, StructType, TimestampType
+from pyspark.sql.types import IntegerType, StringType, StructField, StructType, TimestampType
 
 from pipelines.jobs.streaming.common.job_runtime import await_query, configure_job_logging
+from pipelines.jobs.streaming.common.sentiment_client import CryptoBertClient
+from pipelines.jobs.streaming.common.sentiment_scoring import score_sentiment_dataframe
+from pipelines.jobs.streaming.common.sentiment_state import upsert_sentiment_state
+from pipelines.storage.delta.utils import get_table_config
 from pipelines.transformers.gold.sentiment import GoldSentimentTransformer
+from utils.config_loader import load_config
 from utils.spark_config import (
     get_checkpoint_path,
-    get_delta_path,
+    get_gold_sentiment_endpoint,
+    get_gold_sentiment_timeout_seconds,
     get_gold_trigger_seconds,
     get_gold_watermark_seconds,
     get_gold_window_seconds,
@@ -31,8 +37,9 @@ from utils.spark_utils import create_delta_spark_session
 
 logger = logging.getLogger(__name__)
 
-SILVER_DELTA_PATH = get_delta_path("silver", "delta/silver")
-GOLD_DELTA_PATH = get_delta_path("gold", "delta/gold")
+DATA_CONFIG = load_config("configs/data.yaml")
+SILVER_DELTA_PATH = get_table_config("silver_sentiment", DATA_CONFIG)["path"]
+GOLD_DELTA_PATH = get_table_config("gold_sentiment", DATA_CONFIG)["path"]
 # Use a dedicated checkpoint namespace for the realtime gold+csv sink.
 GOLD_CHECKPOINT_PATH = f"{get_checkpoint_path('gold', 'checkpoints/gold')}_realtime_csv_v1"
 GOLD_WINDOW_SECONDS = get_gold_window_seconds(60)
@@ -40,6 +47,8 @@ GOLD_WINDOW_DURATION = f"{GOLD_WINDOW_SECONDS} seconds"
 GOLD_WATERMARK_SECONDS = get_gold_watermark_seconds(600)
 GOLD_WATERMARK_DURATION = f"{GOLD_WATERMARK_SECONDS} seconds"
 GOLD_TRIGGER_SECONDS = get_gold_trigger_seconds(5)
+GOLD_SENTIMENT_ENDPOINT = get_gold_sentiment_endpoint("http://127.0.0.1:8000/predict")
+GOLD_SENTIMENT_TIMEOUT_SECONDS = get_gold_sentiment_timeout_seconds(10)
 APP_NAME = f"{get_spark_app_name()}-gold"
 GOLD_REALTIME_CSV_PATH = str((Path(GOLD_DELTA_PATH).parent / "gold_sentiment_realtime.csv").resolve())
 EMA_LOOKBACK = 10
@@ -74,9 +83,6 @@ silver_schema = StructType([
     StructField("engagement", IntegerType()),
     StructField("symbol", StringType()),
     StructField("event_time", TimestampType()),
-    StructField("label", StringType()),
-    StructField("confidence", DoubleType()),
-    StructField("weighted_sentiment", DoubleType()),
 ])
 
 
@@ -95,14 +101,6 @@ def build_silver_stream():
         .format("delta")
         .option("startingVersion", "0")
         .load(SILVER_DELTA_PATH)
-    )
-
-
-def build_gold_aggregation(silver_stream):
-    return GoldSentimentTransformer.transform(
-        silver_stream,
-        window_duration=GOLD_WINDOW_DURATION,
-        watermark_duration=GOLD_WATERMARK_DURATION,
     )
 
 
@@ -192,10 +190,9 @@ def _extract_actual_rows_by_minute(batch_df) -> dict[str, dict[datetime, dict[st
     minute_df = (
         batch_df
         .select(
-            F.col("window.end").alias("window_end"),
+            F.col("window_end"),
             F.col("symbol"),
             F.col("sentiment_index").cast("double").alias("sentiment_index"),
-            F.col("total_engagement").cast("double").alias("total_engagement"),
             F.col("avg_confidence").cast("double").alias("avg_confidence"),
             F.col("message_count").cast("long").alias("message_count"),
         )
@@ -204,7 +201,6 @@ def _extract_actual_rows_by_minute(batch_df) -> dict[str, dict[datetime, dict[st
         .groupBy("minute_time", "symbol")
         .agg(
             F.avg("sentiment_index").alias("sentiment_index"),
-            F.sum("total_engagement").alias("total_engagement"),
             F.avg("avg_confidence").alias("avg_confidence"),
             F.sum("message_count").alias("message_count"),
         )
@@ -220,7 +216,6 @@ def _extract_actual_rows_by_minute(batch_df) -> dict[str, dict[datetime, dict[st
 
         extracted[symbol][minute_time] = {
             "sentiment_index": _to_float(row["sentiment_index"], 0.0),
-            "total_engagement": _to_float(row["total_engagement"], 0.0),
             "avg_confidence": _to_float(row["avg_confidence"], 0.0),
             "message_count": _to_int(row["message_count"], 0),
         }
@@ -326,7 +321,7 @@ def _upsert_gold_delta(df) -> None:
         target.alias("t")
         .merge(
             df.alias("s"),
-            "t.symbol = s.symbol AND t.window.start = s.window.start AND t.window.end = s.window.end",
+            "t.symbol = s.symbol AND t.window_start = s.window_start AND t.window_end = s.window_end",
         )
         .whenMatchedUpdateAll()
         .whenNotMatchedInsertAll()
@@ -355,15 +350,13 @@ def _build_fallback_delta_df(batch_df, rows_to_write: list[dict[str, str]]):
             sentiment_index = _to_float(row.get(f"{sym}_sentiment_index"), 0.0)
             fallback_rows.append(
                 Row(
-                    window=Row(
-                        start=minute_start,
-                        end=minute_start + timedelta(minutes=1),
-                    ),
+                    window_start=minute_start,
+                    window_end=minute_start + timedelta(minutes=1),
                     symbol=sym,
                     sentiment_index=sentiment_index,
-                    total_engagement=0.0,
                     avg_confidence=0.0,
                     message_count=0,
+                    window_date=minute_start.date(),
                 )
             )
 
@@ -386,12 +379,35 @@ def process_gold_batch(batch_df, epoch_id: int) -> None:
     has_batch_data = not batch_df.rdd.isEmpty()
     actual_rows_by_symbol: dict[str, dict[datetime, dict[str, float | int]]] = {}
     observed_groups = 0
+    aggregated_batch = None
 
     if has_batch_data:
         batch_df.persist()
         try:
-            _upsert_gold_delta(batch_df)
-            actual_rows_by_symbol = _extract_actual_rows_by_minute(batch_df)
+            client = CryptoBertClient(
+                endpoint=GOLD_SENTIMENT_ENDPOINT,
+                timeout_seconds=GOLD_SENTIMENT_TIMEOUT_SECONDS,
+            )
+            scored_batch = score_sentiment_dataframe(batch_df, client=client)
+            aggregated_raw = GoldSentimentTransformer.transform(
+                scored_batch,
+                window_duration=GOLD_WINDOW_DURATION,
+                watermark_duration=GOLD_WATERMARK_DURATION,
+            )
+            aggregated_batch = (
+                aggregated_raw
+                .select(
+                    F.col("window.start").alias("window_start"),
+                    F.col("window.end").alias("window_end"),
+                    "symbol",
+                    "sentiment_index",
+                    "avg_confidence",
+                    F.col("message_count").cast("int").alias("message_count"),
+                )
+                .withColumn("window_date", F.to_date("window_end"))
+            )
+            _upsert_gold_delta(aggregated_batch)
+            actual_rows_by_symbol = _extract_actual_rows_by_minute(aggregated_batch)
             observed_groups = sum(len(rows) for rows in actual_rows_by_symbol.values())
         finally:
             batch_df.unpersist()
@@ -399,8 +415,20 @@ def process_gold_batch(batch_df, epoch_id: int) -> None:
     rows_to_write = _build_realtime_csv_rows(actual_rows_by_symbol)
     _append_rows_to_csv(csv_path, rows_to_write)
 
-    fallback_delta_df = _build_fallback_delta_df(batch_df, rows_to_write)
-    _upsert_gold_delta(fallback_delta_df)
+    if aggregated_batch is not None:
+        fallback_delta_df = _build_fallback_delta_df(aggregated_batch, rows_to_write)
+        _upsert_gold_delta(fallback_delta_df)
+    if has_batch_data:
+        gold_state_events = (
+            aggregated_batch
+            .select(
+                F.lit("aggregate").alias("source"),
+                F.col("symbol"),
+                F.col("window_end").alias("event_time"),
+            )
+            .where(F.col("event_time").isNotNull() & F.col("symbol").isNotNull())
+        )
+        upsert_sentiment_state(gold_state_events, layer="gold")
     fallback_groups = sum(
         1 for row in rows_to_write if _to_int(row.get("total_message_count"), -1) == 0
     )
@@ -419,13 +447,11 @@ def process_gold_batch(batch_df, epoch_id: int) -> None:
 def run() -> None:
     configure_job_logging()
     silver_stream = build_silver_stream()
-    gold_stream = build_gold_aggregation(silver_stream)
     logger.info("Real-time gold CSV output: %s", GOLD_REALTIME_CSV_PATH)
 
     query: StreamingQuery = (
-        gold_stream.writeStream
+        silver_stream.writeStream
         .queryName(f"{APP_NAME}-write")
-        .outputMode("update")
         .option("checkpointLocation", GOLD_CHECKPOINT_PATH)
         .trigger(processingTime=f"{GOLD_TRIGGER_SECONDS} seconds")
         .foreachBatch(process_gold_batch)

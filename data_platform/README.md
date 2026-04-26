@@ -25,6 +25,8 @@ CryptoQuant is a crypto market MLOps workspace for Binance market data. It inges
 ## Run locally
 
 - Batch pipeline: `python scripts/run_batch.py`
+- Sentiment batch (state-aware catch-up): `python -m pipelines.jobs.batch.sentiment --stage all --mode batch`
+- Sentiment streaming window run: `python -m pipelines.jobs.batch.sentiment --stage all --mode streaming`
 - Prediction API: `./scripts/run_api.sh`
 - Render WebSocket proxy: `uvicorn render_api.app.main:app --reload`
 

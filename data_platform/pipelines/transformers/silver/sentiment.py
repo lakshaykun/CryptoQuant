@@ -12,6 +12,17 @@ class SilverSentimentTransformer:
             if not df.head(1):
                 return df.limit(0)
 
+        kafka_timestamp_col = (
+            F.col("kafka_timestamp")
+            if "kafka_timestamp" in df.columns
+            else F.lit(None).cast("timestamp")
+        )
+        existing_event_time_col = (
+            F.col("event_time")
+            if "event_time" in df.columns
+            else F.lit(None).cast("timestamp")
+        )
+
         cleaned = (
             df
             .filter(F.col("text").isNotNull())
@@ -61,7 +72,8 @@ class SilverSentimentTransformer:
             .withColumn(
                 "event_time",
                 F.coalesce(
-                    F.col("kafka_timestamp"),
+                    existing_event_time_col,
+                    kafka_timestamp_col,
                     F.to_timestamp(F.col("timestamp")),
                     F.to_timestamp(F.from_unixtime(F.col("timestamp").cast("double"))),
                     F.to_timestamp(F.from_unixtime((F.col("timestamp").cast("double") / 1000.0))),

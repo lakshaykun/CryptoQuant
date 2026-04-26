@@ -10,7 +10,7 @@ class SentimentEvent:
     timestamp: str
     source: str
     text: str
-    engagement: int
+    engagement: int = 1
     symbol: str = "BTC"
 
 
@@ -20,7 +20,9 @@ def normalize_event(payload: dict) -> dict:
         timestamp=normalize_timestamp(payload.get("timestamp")),
         source=str(payload.get("source", "unknown")).strip().lower(),
         text=clean_text(str(payload.get("text", ""))),
-        engagement=max(int(payload.get("engagement", 0)), 0),
+        # Engagement is intentionally flattened to 1 so source-specific
+        # "total engagement" logic does not bias downstream sentiment.
+        engagement=1,
         symbol=str(payload.get("symbol", "BTC")).strip().upper(),
     )
 

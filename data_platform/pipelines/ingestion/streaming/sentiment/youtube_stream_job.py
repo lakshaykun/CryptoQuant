@@ -1,26 +1,68 @@
 import time
 import argparse
+from datetime import datetime, timezone
 
+from kafka.errors import KafkaError
 from pipelines.ingestion.streaming.producers.kafka_producer import CryptoProducer
+from pipelines.ingestion.streaming.sentiment.delta_sink import write_events_to_bronze_delta
 from pipelines.ingestion.streaming.sources.sentiment.youtube.source import fetch_youtube_events
+from utils.config_loader import load_config
 
 TOPIC = "btc_yt"
 
 
-def run_once() -> int:
-    producer = CryptoProducer()
-    events = fetch_youtube_events()
+def _streaming_lookback_minutes(default_minutes: int = 30) -> int:
+    config = load_config("configs/data.yaml") or {}
+    sentiment_cfg = config.get("sentiment", {}) if isinstance(config, dict) else {}
+    try:
+        return max(1, int(sentiment_cfg.get("streaming_lookback_minutes", default_minutes)))
+    except (TypeError, ValueError):
+        return default_minutes
+
+
+def _dedupe_events(events: list[dict]) -> list[dict]:
+    unique: dict[str, dict] = {}
     for event in events:
-        producer.send_message(TOPIC, event)
-    producer.flush()
-    producer.close()
-    print(f"Published {len(events)} youtube events")
+        event_id = str(event.get("id", "")).strip()
+        if not event_id:
+            continue
+        unique[event_id] = event
+    return list(unique.values())
+
+
+def run_once() -> int:
+    events = _dedupe_events(
+        fetch_youtube_events(lookback_minutes=_streaming_lookback_minutes())
+    )
+    kafka_published = 0
+    try:
+        producer = CryptoProducer()
+        for event in events:
+            producer.send_message(TOPIC, event)
+        producer.flush()
+        producer.close()
+        kafka_published = len(events)
+    except KafkaError:
+        kafka_published = 0
+    except Exception:
+        kafka_published = 0
+
+    
+    print(
+        f"[{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')} UTC] "
+        f"youtube: fetched={len(events)} kafka={kafka_published} delta={delta_written}"
+    )
     return len(events)
 
 
-def run_forever(interval_seconds: int = 60):
+def run_forever(interval_seconds: int = 60, stats_queue=None):
     while True:
-        run_once()
+        try:
+            count = run_once()
+        except Exception:
+            count = 0
+        if stats_queue is not None:
+            stats_queue.put(("youtube", count, int(time.time())))
         time.sleep(interval_seconds)
 
 

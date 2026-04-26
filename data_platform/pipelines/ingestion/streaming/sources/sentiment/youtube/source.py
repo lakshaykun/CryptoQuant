@@ -199,7 +199,11 @@ def _fetch_events_for_symbol(
 
 # ─── Public entry-point ───────────────────────────────────────────────────────
 
-def fetch_youtube_events(max_results_per_channel: int | None = None) -> list[dict]:
+def fetch_youtube_events(
+    max_results_per_channel: int | None = None,
+    lookback_minutes: int | None = None,
+    emit_current_timestamp: bool = True,
+) -> list[dict]:
 
     youtube = _youtube_client()
     if youtube is None:
@@ -223,4 +227,9 @@ def fetch_youtube_events(max_results_per_channel: int | None = None) -> list[dic
 
         all_events.extend(symbol_events)
 
-    return apply_ingestion_policies(all_events, lookback_hours=lookback_hours)
+    return apply_ingestion_policies(
+        all_events,
+        lookback_hours=lookback_hours,
+        lookback_minutes=lookback_minutes,
+        emit_current_timestamp=emit_current_timestamp,
+    )
