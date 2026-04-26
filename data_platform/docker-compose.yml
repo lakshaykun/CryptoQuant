@@ -1,0 +1,247 @@
+# docker-compose.yml
+name: cryptoquant
+
+x-spark-base: &spark-base
+  build:
+    dockerfile: docker/spark/Dockerfile
+  environment:
+    - PYTHONPATH=/opt/app
+    - PATH=/opt/spark/bin:$PATH
+    - MLFLOW_TRACKING_URI=http://mlflow:5000
+    - PREDICTION_API_URL=http://api:8000/predict
+  volumes:
+    - .:/opt/app
+    - spark-ivy:/root/.ivy2
+    - mlflow-data:/mlflow
+
+services:
+  # =========================
+  # 🟡 KAFKA
+  # =========================
+  kafka:
+    image: apache/kafka:3.7.0
+    ports:
+      - "9092:9092"
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    environment:
+      KAFKA_CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+
+      KAFKA_HEAP_OPTS: "-Xmx256M -Xms256M"
+
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+
+  kafka-init:
+    image: apache/kafka:3.7.0
+    depends_on:
+      - kafka
+    volumes:
+      - ./docker/kafka/init.sh:/init.sh
+    entrypoint: ["/bin/bash", "/init.sh"]
+
+
+  # =========================
+  # 🟠 STREAM PRODUCER
+  # =========================
+  stream-producer:
+    build:
+      dockerfile: docker/stream-producer/Dockerfile
+    command: python pipelines/ingestion/streaming/jobs/crypto_stream_job.py
+    restart: always
+    depends_on:
+      - kafka
+      - kafka-init
+    volumes:
+      - .:/opt/app
+
+  dashboard:
+    build:
+      dockerfile: docker/dashboard/Dockerfile
+    working_dir: /opt/app
+    depends_on:
+      - mlflow
+    environment:
+      - PYTHONPATH=/opt/app
+      - STREAMLIT_SERVER_ADDRESS=0.0.0.0
+      - STREAMLIT_SERVER_HEADLESS=true
+      - STREAMLIT_SERVER_PORT=8501
+      - STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+    volumes:
+      - .:/opt/app
+    ports:
+      - "8501:8501"
+    command: streamlit run dashboard/app.py --server.address 0.0.0.0 --server.port 8501
+
+  api:
+    build:
+      dockerfile: docker/api/Dockerfile
+    working_dir: /opt/app
+    command: uvicorn api.app:app --host 0.0.0.0 --port 8000 --reload
+    restart: unless-stopped
+    depends_on:
+      - mlflow
+    environment:
+      - PYTHONPATH=/opt/app
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+    volumes:
+      - .:/opt/app
+    ports:
+      - "8000:8000"
+    
+  # =========================
+  # 🔵 SPARK
+  # =========================
+  spark-streaming:
+    <<: *spark-base
+    working_dir: /opt/app
+    command: >
+      spark-submit
+      --master local[2]
+      --driver-memory 512m
+      --executor-memory 512m
+      --packages io.delta:delta-spark_2.12:3.1.0,org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0
+      --conf spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension
+      --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog
+      /opt/app/pipelines/jobs/streaming/spark_streaming.py
+    depends_on:
+      - api
+      - stream-producer
+    restart: always
+
+  spark-predictions:
+    <<: *spark-base
+    working_dir: /opt/app
+    command: >
+      spark-submit
+      --master local[1]
+      --driver-memory 512m
+      --executor-memory 512m
+      --conf spark.executor.cores=1
+      --conf spark.driver.maxResultSize=512m
+      --packages io.delta:delta-spark_2.12:3.1.0
+      --conf spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension
+      --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog
+      /opt/app/pipelines/jobs/streaming/spark_predictions.py
+    depends_on:
+      - api
+      - spark-streaming
+      - mlflow
+    restart: always
+  
+  spark:
+    <<: *spark-base
+    user: "0:0"
+    working_dir: /opt/app
+    command: tail -f /dev/null
+    restart: unless-stopped
+
+  # =========================
+  # 🟢 AIRFLOW
+  # =========================
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+      POSTGRES_SHARED_BUFFERS: 64MB
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres-db-volume:/var/lib/postgresql/data
+  
+  airflow-webserver:
+    build:
+      dockerfile: docker/airflow/Dockerfile
+    working_dir: /opt/app
+    user: "0:0"
+    depends_on:
+      - spark
+      - postgres
+      - mlflow
+    ports:
+      - "8080:8080"
+    environment:
+      - AIRFLOW_HOME=/opt/airflow
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__CORE__DAGS_FOLDER=/opt/app/airflow/dags
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+      - AIRFLOW__API__AUTH_BACKENDS=airflow.api.auth.backend.basic_auth
+      - PYTHONPATH=/opt/app
+    volumes:
+      - airflow-home:/opt/airflow
+      - airflow-logs:/opt/airflow/logs
+      - .:/opt/app
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: webserver
+
+  airflow-scheduler:
+    build:
+      dockerfile: docker/airflow/Dockerfile
+    working_dir: /opt/app
+    user: "0:0"
+    depends_on:
+      - airflow-webserver
+    environment:
+      - AIRFLOW_HOME=/opt/airflow
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__CORE__DAGS_FOLDER=/opt/app/airflow/dags
+      - AIRFLOW__CORE__PARALLELISM=4
+      - AIRFLOW__CORE__DAG_CONCURRENCY=2
+      - AIRFLOW__SCHEDULER__MAX_THREADS=2
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+      - AIRFLOW__API__AUTH_BACKENDS=airflow.api.auth.backend.basic_auth
+      - TRIGGER_INGEST_ON_START=true
+      - PYTHONPATH=/opt/app
+    volumes:
+      - airflow-home:/opt/airflow
+      - airflow-logs:/opt/airflow/logs
+      - .:/opt/app
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: scheduler
+  
+  # =========================
+  # 🟢 MLFLOW
+  # =========================
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:latest
+    ports:
+      - "5000:5000"
+    environment:
+      - MLFLOW_SERVER_ALLOWED_HOSTS=*
+    command: >
+      mlflow server
+      --backend-store-uri sqlite:////mlflow/mlflow.db
+      --serve-artifacts
+      --artifacts-destination /mlflow/artifacts
+      --host 0.0.0.0
+      --port 5000
+    volumes:
+      - mlflow-data:/mlflow
+
+# =========================
+# 📦 VOLUMES
+# =========================
+volumes:
+  kafka-data:
+  postgres-db-volume:
+  airflow-home:
+  spark-ivy:
+  airflow-logs:
+  mlflow-data:

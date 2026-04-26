@@ -1,21 +1,25 @@
-from delta import configure_spark_with_delta_pip
-from pyspark.sql import SparkSession
+# models/data/loader.py
 
-def get_spark():
-    builder = (
-        SparkSession.builder
-        .appName("crypto-mlops")
-        .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension")
-        .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog")
-    )
+from deltalake import DeltaTable
+from utils_global.logger import get_logger
+from utils_global.config_loader import load_config
 
-    spark = configure_spark_with_delta_pip(builder).getOrCreate()
-
-    return spark
+logger = get_logger(__name__)
+data_config = load_config("configs/data.yaml")
 
 def load_data():
-    spark = get_spark()
+    dt = DeltaTable(data_config["tables"]["gold_market"]["path"])
+    model_config = load_config("configs/model.yaml")
+    
+    df = dt.to_pandas(
+        columns=model_config["expected_columns"]
+    )
+    
+    path = model_config["train_data_path"]
 
-    df = spark.read.format("delta").load("medallion/gold/market")
+    df.to_parquet(path)
 
-    return df.toPandas()
+    logger.info(f"Data saved to {path}")
+
+if __name__ == "__main__":
+    load_data()

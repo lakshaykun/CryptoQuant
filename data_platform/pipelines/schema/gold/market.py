@@ -3,6 +3,8 @@
 from pyspark.sql.types import *
 
 
+from pyspark.sql.types import *
+
 GOLD_MARKET_SCHEMA = StructType([
     StructField("open_time", TimestampType(), False),
     StructField("symbol", StringType(), False),
@@ -32,28 +34,44 @@ GOLD_MARKET_SCHEMA = StructType([
     # moving averages
     StructField("ma_5", DoubleType(), True),
     StructField("ma_20", DoubleType(), True),
+    StructField("ma_50", DoubleType(), True),
 
     # rolling stats
     StructField("volatility_5", DoubleType(), True),
     StructField("volume_5", DoubleType(), True),
     StructField("buy_ratio_5", DoubleType(), True),
+    StructField("volatility_std_10", DoubleType(), True),
+
+    # return features
+    StructField("return_5", DoubleType(), True),
+    StructField("return_20", DoubleType(), True),
 
     # derived signals
-    StructField("momentum", DoubleType(), True),
+    StructField("momentum_ratio", DoubleType(), True),
     StructField("volume_spike", DoubleType(), True),
-    StructField("price_range_ratio", DoubleType(), True),
     StructField("body_size", DoubleType(), True),
-
-    # time features
-    StructField("hour", IntegerType(), True),
-    StructField("day_of_week", IntegerType(), True),
+    StructField("volatility_ratio", DoubleType(), True),
 
     # trend features
     StructField("trend_strength", DoubleType(), True),
-    StructField("volatility_ratio", DoubleType(), True),
+    StructField("trend_long", DoubleType(), True),
+    StructField("trend_regime", IntegerType(), True),
+
+    # microstructure dynamics
+    StructField("imbalance_change", DoubleType(), True),
+
+    # interactions
+    StructField("volatility_momentum", DoubleType(), True),
+
+    # mean reversion
+    StructField("price_deviation", DoubleType(), True),
+
+    # time features (encoded)
+    StructField("hour_sin", DoubleType(), True),
+    StructField("hour_cos", DoubleType(), True),
 
     # metadata
     StructField("is_valid_feature_row", BooleanType(), True),
     StructField("date", DateType(), True),
-    StructField("ingestion_time", TimestampType(), True)
+    StructField("ingestion_time", TimestampType(), True),
 ])

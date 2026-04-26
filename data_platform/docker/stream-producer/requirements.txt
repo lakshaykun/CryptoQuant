@@ -1,0 +1,5 @@
+# docker/stream_producer/requirements.txt
+
+websockets
+kafka-python
+PyYAML

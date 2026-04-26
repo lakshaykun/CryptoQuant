@@ -1,8 +1,6 @@
 # configs/kafka.yaml
 
-brokers:
-  host: "localhost:9092"
-  docker: "crypto-kafka:29092"
+brokers: "kafka:9092"
 
 topics:
   crypto_prices:

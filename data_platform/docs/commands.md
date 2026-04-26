@@ -29,3 +29,55 @@ docker exec -it crypto-kafka /opt/kafka/bin/kafka-console-consumer.sh \
   --topic crypto_prices \
   --from-beginning \
   --bootstrap-server localhost:9092
+
+
+### Starting data_platform
+```
+clear
+docker compose down
+docker compose build
+docker compose up -d
+docker ps -a
+```
+
+docker compose -p data_platform up --build -d
+
+http://localhost:8080 - airflow / airflow
+
+
+### clear data in delta
+sudo rm -rf delta/bronze/market delta/silver/market delta/raw_data/market delta/state/market delta/state/monitoring delta/state/predictions delta/gold/market delta/checkpoints delta/predictions
+
+### To reset permissions if needed
+sudo chown -R $USER:$USER .
+
+
+### Streaming job
+docker exec -it spark-master \
+spark-submit pipelines/ingestion/streaming/spark/spark_streaming.py
+
+
+### Drift monitoring checks
+docker exec -it airflow-scheduler python -m models.monitoring.drift
+
+curl http://localhost:8000/drift
+
+
+### Run drift monitor manually
+docker exec -it airflow-scheduler python -m models.monitoring.drift
+
+
+### Manual retraining trigger via Airflow API
+curl -u airflow:airflow -X POST http://localhost:8080/api/v1/dags/model_training_pipeline/dagRuns \
+  -H "Content-Type: application/json" \
+  -d '{"conf":{"trigger_source":"manual"}}'
+
+
+### Dashboard setup
+pip install -r dashboard/requirements.txt
+
+
+### Run dashboard
+conda activate crypto && streamlit run dashboard/app.py
+
+http://localhost:8501

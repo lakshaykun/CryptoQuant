@@ -1,12 +1,12 @@
 # pipelines/ingestion/streaming/source/binance_source.py
 
-from pipelines.ingestion.streaming.sources.websocket_client import WebSocketClient
+from pipelines.utils.websocket_client import WebSocketClient
 
 class BinanceSource:
     def __init__(self, logger, data_config: dict):
         # Load config and URI for Binance WebSocket
         self.config = data_config
-        self.uri = self.config.get("binance_ws_uri")
+        self.uri = self.config["render_uri"]["market_live"]
         self.logger = logger
         symbols = self.config.get("symbols", ["BTCUSDT", "ETHUSDT"])
         interval = self.config.get("interval", "1m")

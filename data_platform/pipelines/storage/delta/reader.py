@@ -4,8 +4,8 @@ from typing import Optional, List
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql import functions as F
 from pipelines.storage.delta.utils import get_table_config
-from pipelines.utils.config_loader import load_config
-from pipelines.utils.logger import get_logger
+from utils_global.config_loader import load_config
+from utils_global.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -53,7 +53,6 @@ def read_table(
 def read_incremental(
     spark: SparkSession,
     table_name: str,
-    open_time_col: str,
     last_value: Optional[datetime.datetime],
     symbols: Optional[List[str]] = None
 ) -> DataFrame:
@@ -68,7 +67,7 @@ def read_incremental(
 
         if last_value is not None:
             df = df.filter(F.col("date") >= F.to_date(F.lit(last_value)))
-            df = df.filter(F.col(open_time_col) > F.lit(last_value))
+            df = df.filter(F.col("open_time") > F.lit(last_value))
 
         if symbols is not None:
             df = df.filter(F.col("symbol").isin(symbols))
@@ -81,6 +80,34 @@ def read_incremental(
         logger.error(f"[{table_name}] Incremental read failed → {e}")
         raise
 
+def read_incremental_symbols(
+    spark: SparkSession,
+    table_name: str,
+    last_values: dict
+) -> DataFrame:
+    """
+    Reads only new data after last_value per symbol.
+    """
+
+    table_config = get_table_config(table_name, CONFIG)
+
+    try:
+        df = spark.read.format("delta").load(table_config["path"])
+
+        meta_df = spark.createDataFrame([
+            (symbol, ts) for symbol, ts in last_values.items()
+        ], ["symbol", "last_time"])
+
+        df = df.join(meta_df, "symbol") \
+            .filter(F.col("open_time") > F.col("last_time"))
+
+        logger.info(f"[{table_name}] Incremental read for symbols with last values")
+
+        return df
+
+    except Exception as e:
+        logger.error(f"[{table_name}] Incremental read failed → {e}")
+        raise
 
 # ---------------------------
 # 🔹 Time Travel (Delta Feature)
@@ -174,42 +201,50 @@ def get_last_value(
         return None
     
 
-def get_last_open_time_symbols(
-        spark: SparkSession, 
+def get_last_processed_time_symbols(
+        spark: SparkSession,
         table_name: str,
-        symbols: List[str], 
-        start_date: datetime.datetime
+        symbols: List[str],
+        fallback_time: datetime.datetime
 ) -> dict:
-    '''Returns max open_time per symbol (used for incremental pipelines).'''
+    '''Returns last_processed_time per symbol from a state/checkpoint table.'''
 
     table_config = get_table_config(table_name, CONFIG)
-    
+
     try:
         df = spark.read.format("delta").load(table_config["path"])
 
-        # Filter only required symbols (important for performance)
         df = df.filter(F.col("symbol").isin(symbols))
 
-        # Get max open_time per symbol
         result_df = (
             df.groupBy("symbol")
-              .agg(F.max("open_time").alias("max_time"))
+              .agg(F.max("last_processed_time").alias("last_processed_time"))
         )
 
-        # Convert to dict: symbol -> open_time
         result = {
-            row["symbol"]: row["max_time"]
-            for row in result_df.collect()
-            if row["max_time"] is not None
+            symbol: fallback_time
+            for symbol in symbols
         }
 
-        # Ensure all symbols exist in output (even if no data)
-        for symbol in symbols:
-            if symbol not in result:
-                result[symbol] = start_date
+        for row in result_df.collect():
+            if row["last_processed_time"] is not None:
+                result[row["symbol"]] = row["last_processed_time"]
 
         return result
 
     except Exception as e:
-        logger.warning(f"No existing bronze data found: {e}")
-        return {symbol: start_date for symbol in symbols}
+        logger.warning(f"[{table_name}] No state data found or error → {e}")
+        return {symbol: fallback_time for symbol in symbols}
+    
+
+def check_table_exists(spark: SparkSession, table_name: str) -> bool:
+    '''Checks if Delta table exists.'''
+
+    table_config = get_table_config(table_name, CONFIG)
+
+    try:
+        spark.read.format("delta").load(table_config["path"]).limit(1).collect()
+        return True
+    except Exception as e:
+        logger.warning(f"Table {table_name} does not exist or is empty: {e}")
+        return False

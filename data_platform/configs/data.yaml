@@ -2,25 +2,42 @@
 
 interval: "1m"
 start_date: "2026-04-01"
-
+state_date: "2026-04-01"
 
 tables:
     bronze_market:
-        "path": "medallion/bronze/market/"
+        "path": "/opt/app/delta/bronze/market/"
         "partition_by": ["symbol", "date"]
-        "checkpoint": "medallion/checkpoint/bronze/market/"
 
     silver_market:
-        "path": "medallion/silver/market/"
+        "path": "/opt/app/delta/silver/market/"
         "partition_by": ["symbol", "date"]
-        "checkpoint": "medallion/checkpoint/silver/market/"
 
     gold_market:
-        "path": "medallion/gold/market/"
+        "path": "/opt/app/delta/gold/market/"
         "partition_by": ["symbol", "date"]
-        "checkpoint": "medallion/checkpoint/gold/market/"
+
+    market_state:
+        "path": "/opt/app/delta/state/market/"
+
+    predictions_log_return_lead1:
+        "path": "/opt/app/delta/predictions/log_return_lead1/"
+        "partition_by": ["symbol", "date"]
+
+    predictions_log_return_lead1_state:
+        "path": "/opt/app/delta/state/predictions/log_return_lead1/"
+
+raw_data_path:
+    market: "/opt/app/delta/raw_data/market/"
+
+checkpoints:
+    market: "/opt/app/delta/checkpoints/market/"
+    predictions_log_return_lead1: "/opt/app/delta/checkpoints/predictions/log_return_lead1/"
 
 
-symbols: ["BTCUSDT", "ETHUSDT"]
+symbols: ["BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT", "USDCUSDT"]
 
-binance_ws_uri: "wss://cryptoquantproducer.onrender.com/ws/binance/live?symbols=btcusdt,ethusdt&interval=1m"
+
+render_uri:
+    market_live: "wss://cryptoquantproducer.onrender.com/ws/binance/live"
+    market_today: "https://cryptoquantproducer.onrender.com/binance/backfill"

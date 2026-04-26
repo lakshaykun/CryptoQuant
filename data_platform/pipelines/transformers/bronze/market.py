@@ -11,37 +11,13 @@ from pipelines.schema.raw.market import RAW_MARKET_SCHEMA
 class BronzeMarketTransformer:
     @staticmethod
     def transform(
-        df: Union[SparkDataFrame, PandasDataFrame], 
-        source: str = "stream", 
-        spark: Optional[SparkSession] = None
+        df: SparkDataFrame, 
+        source: str = "stream",
     ) -> SparkDataFrame:
         '''Transforms raw market data into a standardized format for bronze layer.'''
         
         if df is None:
             return None
-        
-        # If the input is a Pandas DataFrame, convert it to a Spark DataFrame with the appropriate schema
-        if isinstance(df, PandasDataFrame):
-            if spark is None:
-                raise ValueError("SparkSession is required for Pandas -> Spark conversion")
-            
-            df = df[[
-                "symbol",
-                "open_time",
-                "close_time",
-                "open",
-                "high",
-                "low",
-                "close",
-                "volume",
-                "quote_volume",
-                "trades",
-                "taker_buy_base",
-                "taker_buy_quote"
-            ]]
-
-            # Enforce schema
-            df = spark.createDataFrame(df, schema=RAW_MARKET_SCHEMA)
         
         if not df.isStreaming:
             if not df.head(1):

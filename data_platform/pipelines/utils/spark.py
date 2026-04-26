@@ -1,8 +1,7 @@
 # pipelines/utils/spark.py
 
 from pyspark.sql import SparkSession
-from delta import configure_spark_with_delta_pip
-from pipelines.utils.config_loader import load_config
+from utils_global.config_loader import load_config
 
 _spark = None  # singleton
 
