@@ -56,7 +56,7 @@ class Trainer:
         # X_test = scaler.transform(X_test)
 
 
-        best_score = float("inf")
+        best_score = float(0)
         best_run_id = None
         best_model_name = None
         best_report = None
@@ -79,7 +79,7 @@ class Trainer:
 
                     score = results["directional_accuracy"]
 
-                    if score < best_score:
+                    if score > best_score:
                         best_score = score
                         best_run_id = run.info.run_id
                         best_model_name = model_info.name

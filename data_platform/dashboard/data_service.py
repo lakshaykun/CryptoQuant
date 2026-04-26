@@ -30,7 +30,7 @@ def prepare_predictions_frame(
     target_frame = target_frame.sort_values(["symbol", "open_time"])
     target_frame["actual_close"] = target_frame.groupby("symbol")["close"].shift(-1)
     target_frame["actual_log_return_lead1"] = target_frame.groupby("symbol")["log_return"].shift(-1)
-    target_frame = target_frame[["symbol", "open_time", "actual_close", "actual_log_return_lead1"]]
+    target_frame = target_frame[["symbol", "open_time", "actual_close", "close", "actual_log_return_lead1"]]
 
     subset = subset.merge(target_frame, on=["symbol", "open_time"], how="left")
     subset["predicted_close"] = subset["close"] * np.exp(subset["prediction"])
