@@ -1,44 +1,4 @@
 services:
-  kafka:
-    image: apache/kafka:3.7.0
-    container_name: crypto-kafka
-    ports:
-      - "9092:9092"
-
-    volumes:
-      - kafka-data:/var/lib/kafka/data
-
-    environment:
-      KAFKA_CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
-      KAFKA_NODE_ID: 1
-      KAFKA_PROCESS_ROLES: broker,controller
-      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
-
-      KAFKA_LISTENERS: PLAINTEXT://:9092,PLAINTEXT_INTERNAL://:29092,CONTROLLER://:9093
-
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_INTERNAL://crypto-kafka:29092
-
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
-
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT_INTERNAL
-      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
-
-      KAFKA_LOG_DIRS: /var/lib/kafka/data
-
-      # Dev-safe configs
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
-      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
-
-  topic-init:
-    image: apache/kafka:3.7.0
-    depends_on:
-      - kafka
-    command: >
-      sh -c "echo 'Waiting for Kafka...' &&
-             sleep 15 &&
-             /opt/kafka/bin/kafka-topics.sh --create --if-not-exists --topic crypto_prices --bootstrap-server crypto-kafka:29092 --partitions 3 --replication-factor 1"
-
   timescaledb:
     image: timescale/timescaledb:latest-pg16
     container_name: crypto-timescaledb
@@ -54,14 +14,14 @@ services:
   delta-sync:
     build:
       context: .
-      dockerfile: pipelines/serving/Dockerfile
+      dockerfile: delta-sync/Dockerfile
     container_name: crypto-delta-sync
     depends_on:
       - timescaledb
     env_file:
       - .env
     volumes:
-      - ./medallion:/app/medallion
+      - ./data_platform/medallion:/app/medallion
 
   dashboard-api:
     build:
