@@ -3,6 +3,7 @@
 import pandas as pd
 from utils_global.config_loader import load_config
 from utils_global.logger import get_logger
+import numpy as np
 
 logger = get_logger(__name__)
 model_config = load_config("configs/model.yaml")
@@ -28,12 +29,13 @@ def feature_engineering():
     df = df.reset_index(drop=True)
 
     # encoding symbol into integer and using all symbols from config
-    symbols = data_config["symbols"]
     df = df.copy()
-    df["symbol"] = df["symbol"].apply(lambda x: symbols.index(x) if x in symbols else -1)
+    symbol_map = {s: i for i, s in enumerate(data_config["symbols"])}
+    df["symbol"] = df["symbol"].map(symbol_map).fillna(-1).astype(int)
 
     # create target variable
-    df["log_return_lead1"] = df["close"].shift(-1) / df["close"]
+    df["log_return_lead1"] = np.log(df["close"].shift(-1) / df["close"])
+    df = df.dropna(subset=["log_return_lead1"])
 
     df.to_parquet(data_path)
     logger.info("Feature engineering completed and saved to parquet.")
