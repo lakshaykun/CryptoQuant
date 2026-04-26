@@ -1,4 +1,5 @@
 # docker-compose.yml
+name: cryptoquant
 
 x-spark-base: &spark-base
   build:
