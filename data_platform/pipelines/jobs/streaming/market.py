@@ -17,7 +17,7 @@ from pipelines.schema.gold.market import GOLD_MARKET_SCHEMA
 
 from pipelines.storage.delta.writer import write_batch
 
-from pipelines.storage.delta.market_strem_state import load_last_offsets, save_offsets
+from pipelines.storage.delta.market_stream_state import load_last_offsets, save_offsets
 from pipelines.jobs.streaming.kafka_batch import get_kafka_batch
 
 

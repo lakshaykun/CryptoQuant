@@ -10,7 +10,7 @@ from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 def build_spark_submit(task_script):
     return f"""
     docker exec cryptoquant-spark-1 spark-submit \
-      --master local[*] \
+      --master local[2] \
       --packages io.delta:delta-spark_2.12:3.1.0 \
       --conf spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension \
       --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog \
@@ -79,14 +79,9 @@ with DAG(
 
     trigger_training = TriggerDagRunOperator(
         task_id="trigger_training",
-        trigger_dag_id="model_training_pipeline"
-    )
-
-    trigger_predictions = TriggerDagRunOperator(
-        task_id="trigger_predictions",
-        trigger_dag_id="batch_predictions_pipeline"
+        trigger_dag_id="model_training_bootstrap"
     )
 
     ingest_historical >> bronze
     ingest_today >> bronze
-    bronze >> silver >> gold >> cleanup >> trigger_training >> trigger_predictions
+    bronze >> silver >> gold >> cleanup >> trigger_training

@@ -12,9 +12,9 @@ from utils_global.config_loader import load_config
 dataConfig = load_config("configs/data.yaml")
 
 
-def load_last_offsets(spark):
+def load_last_offsets(spark, table_name="market_stream_state"):
     try:
-        df = read_table(spark, "market_stream_state")
+        df = read_table(spark, table_name)
 
         offsets = (
             df.groupBy("topic", "partition")
