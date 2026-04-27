@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from dashboard.backend.db.session import init_pool, close_pool
-from dashboard.backend.api.routes import candles, features, analytics, portfolio, symbols
+from dashboard.backend.api.routes import candles, features, analytics, portfolio, symbols, predictions
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi_cache import FastAPICache
 from fastapi_cache.backends.inmemory import InMemoryBackend
@@ -31,3 +31,4 @@ app.include_router(features.router,  prefix="/api/v1/features",  tags=["features
 # app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["analytics"])
 # app.include_router(portfolio.router, prefix="/api/v1/portfolio", tags=["portfolio"])
 app.include_router(symbols.router,   prefix="/api/v1/symbols",   tags=["symbols"])
+app.include_router(predictions.router, prefix="/api/v1/predictions", tags=["predictions"])

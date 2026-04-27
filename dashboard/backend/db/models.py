@@ -41,3 +41,16 @@ class Market(Base):
     is_valid_feature_row : Mapped[bool]     = mapped_column(Boolean, nullable=True)
     date                 : Mapped[date_type]     = mapped_column(Date, nullable=True)
     ingestion_time       : Mapped[datetime] = mapped_column(sa.TIMESTAMP(timezone=True), nullable=True)
+
+class Prediction(Base):
+    __tablename__ = "predictions"
+
+    open_time        : Mapped[datetime]  = mapped_column(sa.TIMESTAMP(timezone=True), primary_key=True)
+    symbol           : Mapped[str]       = mapped_column(Text, primary_key=True)
+    date             : Mapped[date_type] = mapped_column(Date, nullable=True)
+    prediction       : Mapped[float]     = mapped_column(Double, nullable=True)
+    ingestion_time   : Mapped[datetime]  = mapped_column(sa.TIMESTAMP(timezone=True), nullable=True)
+    predicted_close  : Mapped[float]     = mapped_column(Double, nullable=True)  # close * exp(prediction)
+    actual_close     : Mapped[float]     = mapped_column(Double, nullable=True)  # filled in later
+    error            : Mapped[float]     = mapped_column(Double, nullable=True)  # actual - predicted, filled in later
+    direction_correct: Mapped[bool]      = mapped_column(Boolean, nullable=True) # filled in later

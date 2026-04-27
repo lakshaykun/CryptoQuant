@@ -12,39 +12,44 @@ logger = get_logger(__name__)
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 
-async def get_last_synced_time(conn: asyncpg.Connection) -> datetime.datetime | None:
-    """
-    Gets the latest open_time already in TimescaleDB.
-    """
-    result = await conn.fetchval("SELECT MAX(open_time) FROM market")
+async def get_last_synced_time(conn: asyncpg.Connection, table: str) -> datetime.datetime | None:
+    result = await conn.fetchval(f"SELECT MAX(open_time) FROM {table}")
     return result
 
-
 async def run():
-    """
-    Reads new rows from Delta gold table and writes to TimescaleDB.
-    """
     logger.info("[job] Starting sync run")
-
     conn = await asyncpg.connect(DATABASE_URL)
 
     try:
-        last_synced_time = await get_last_synced_time(conn)
+        # read market data
+        last_market_time = await get_last_synced_time(conn, "market")
 
-        # if syncing for the first time, do a full load; otherwise, only read new rows
-        if last_synced_time is None:
-            logger.info("[job] No existing data — running full load")
-            df = reader.read_full()
+        if last_market_time is None:
+            df_market = reader.read_full()
         else:
-            logger.info(f"[job] Incremental load from {last_synced_time}")
-            df = reader.read_incremental(last_synced_time)
+            df_market = reader.read_incremental(last_market_time)
 
-        if df.empty:
-            logger.info("[job] No new rows found — skipping write")
-            return
+        # write market data
+        if not df_market.empty:
+            await writer.upsert_market_rows(df_market, conn)
+        else:
+            logger.info("[job] No new market rows")
 
-        rows_written = await writer.upsert_market_rows(df, conn)
-        logger.info(f"[job] Sync complete → {rows_written} rows written")
+        # read predictions data
+        last_pred_time = await get_last_synced_time(conn, "predictions")
+
+        if last_pred_time is None:
+            df_pred = reader.read_predictions_full()
+        else:
+            df_pred = reader.read_predictions_incremental(last_pred_time)
+
+        # write predictions data
+        if not df_pred.empty:
+            await writer.upsert_prediction_rows(df_pred, conn)
+        else:
+            logger.info("[job] No new prediction rows")
+
+        logger.info("[job] Sync complete")
 
     except Exception as e:
         logger.error(f"[job] Sync run failed → {e}")
