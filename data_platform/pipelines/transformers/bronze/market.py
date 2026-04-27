@@ -1,9 +1,7 @@
 # pipelines/transformations/bronze/market.py
 
-from pyspark.sql import SparkSession, functions as F
+from pyspark.sql import functions as F
 from pyspark.sql import DataFrame as SparkDataFrame
-from pandas import DataFrame as PandasDataFrame
-from typing import Optional, Union
 
 
 from pipelines.schema.raw.market import RAW_MARKET_SCHEMA

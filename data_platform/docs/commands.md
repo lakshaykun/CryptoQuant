@@ -48,6 +48,8 @@ http://localhost:8080 - airflow / airflow
 ### clear data in delta
 sudo rm -rf delta/bronze/market delta/silver/market delta/raw_data/market delta/state/market delta/state/monitoring delta/state/predictions delta/gold/market delta/checkpoints delta/predictions
 
+sudo rm -rf delta/state/predictions delta/checkpoints/predictions delta/predictions
+
 ### To reset permissions if needed
 sudo chown -R $USER:$USER .
 

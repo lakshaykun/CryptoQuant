@@ -1,11 +1,11 @@
-# airflow/dags/batch_predictions_pipeline.py
+# airflow/dags/batch_predictions_bootstrap.py
 
 from airflow import DAG
 from airflow.operators.bash import BashOperator
 from airflow.operators.python import PythonOperator
 from datetime import datetime, timedelta
+from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 from airflow.models import Variable
-from airflow.exceptions import AirflowSkipException
 
 
 def build_spark_submit(task_script):
@@ -18,24 +18,18 @@ def build_spark_submit(task_script):
       /opt/app/{task_script}
     """
 
-def check_enabled():
-    if Variable.get("predictions_pipeline_enabled", default_var="false") != "true":
-        raise AirflowSkipException("Pipeline not enabled yet")
+def enable_pipeline_var():
+    Variable.set("predictions_pipeline_enabled", "true")
 
 with DAG(
-    dag_id="batch_predictions_pipeline",
+    dag_id="batch_predictions_bootstrap",
     start_date=datetime(2024, 1, 1),
-    schedule='*/5 * * * *',
+    schedule=None,
     catchup=False,
     max_active_runs=1,
     is_paused_upon_creation=False,
 ) as dag:
     
-    check_pipeline = PythonOperator(
-        task_id="check_pipeline",
-        python_callable=check_enabled,
-    )
-
     predict = BashOperator(
         task_id="predict_log_return_lead1",
         bash_command=build_spark_submit(
@@ -45,4 +39,15 @@ with DAG(
         retry_delay=timedelta(minutes=2),
     )
 
-    check_pipeline >> predict
+    enable_pipeline = PythonOperator(
+        task_id="enable_pipeline",
+        python_callable=enable_pipeline_var,
+    )
+
+    trigger_main = TriggerDagRunOperator(
+        task_id="trigger_main_pipeline",
+        trigger_dag_id="batch_predictions_pipeline",
+    )
+
+    
+    predict >> enable_pipeline >> trigger_main

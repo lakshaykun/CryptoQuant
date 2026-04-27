@@ -3,6 +3,6 @@
 brokers: "kafka:9092"
 
 topics:
-  crypto_prices:
-    partitions: 3
-    replication_factor: 1
+  market_stream: crypto_prices
+  
+  predictions: crypto_predictions

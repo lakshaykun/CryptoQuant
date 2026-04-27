@@ -155,8 +155,7 @@ class GoldMarketTransformer:
 
     @staticmethod
     def process_gold_stream_batch(
-        df: SparkDataFrame,
-        epoch_id: int
+        df: SparkDataFrame
     ):
         """
         For stream pipelines, we need to load historical silver data to calculate features that require past values (e.g. moving averages, lags). This function handles that logic.

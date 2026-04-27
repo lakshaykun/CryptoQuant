@@ -46,39 +46,51 @@ def write_batch(
         validate_partitions(df, partition_cols)
 
         # ---------------------------
-        # UPSERT LOGIC
+        # UPSERT LOGIC with 2 retries
         # ---------------------------
-        if upsert and DeltaTable.isDeltaTable(df.sparkSession, path):
-            delta_table = DeltaTable.forPath(df.sparkSession, path)
+        for attempt in range(3):
+            try:
+                if upsert and DeltaTable.isDeltaTable(df.sparkSession, path):
+                    delta_table = DeltaTable.forPath(df.sparkSession, path)
 
-            (
-                delta_table.alias("t")
-                .merge(
-                    df.alias("s"),
-                    "t.symbol = s.symbol AND t.open_time = s.open_time"
-                )
-                .whenMatchedUpdateAll()
-                .whenNotMatchedInsertAll()
-                .execute()
-            )
+                    (
+                        delta_table.alias("t")
+                        .merge(
+                            df.alias("s"),
+                            "t.symbol = s.symbol AND t.open_time = s.open_time"
+                        )
+                        .whenMatchedUpdateAll()
+                        .whenNotMatchedInsertAll()
+                        .execute()
+                    )
 
-            logger.info(f"[{table_name}] Merge successful → {path}")
+                    logger.info(f"[{table_name}] Merge successful → {path}")
 
-        else:
-            writer = df.write.format("delta").mode(mode)
+                else:
+                    writer = df.write.format("delta").mode(mode)
 
-            if partition_cols:
-                writer = writer.partitionBy(*partition_cols)
+                    if partition_cols:
+                        writer = writer.partitionBy(*partition_cols)
 
-            if merge_schema:
-                writer = writer.option("mergeSchema", "true")
+                    if merge_schema:
+                        writer = writer.option("mergeSchema", "true")
 
-            writer.save(path)
+                    writer.save(path)
 
-            logger.info(f"[{table_name}] Initial write successful → {path}")
+                    logger.info(f"[{table_name}] Initial write successful → {path}")
+                
+                break  # Exit retry loop on success
+
+            except Exception as e:
+                logger.warning(f"[{table_name}] Write attempt {attempt + 1} failed → {e}")
+                if attempt == 2:
+                    raise
+                else:
+                    continue
 
         logger.info(f"[{table_name}] Batch write completed -> {df.count()} rows")
         df.show(5, truncate=False)
+        
     except Exception as e:
         logger.error(f"[{table_name}] Delta write failed → {e}")
         raise

@@ -105,49 +105,12 @@ services:
   # =========================
   # 🔵 SPARK
   # =========================
-  spark-streaming:
-    <<: *spark-base
-    working_dir: /opt/app
-    command: >
-      spark-submit
-      --master local[2]
-      --driver-memory 512m
-      --executor-memory 512m
-      --packages io.delta:delta-spark_2.12:3.1.0,org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0
-      --conf spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension
-      --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog
-      /opt/app/pipelines/jobs/streaming/spark_streaming.py
-    depends_on:
-      - api
-      - stream-producer
-    restart: always
-
-  spark-predictions:
-    <<: *spark-base
-    working_dir: /opt/app
-    command: >
-      spark-submit
-      --master local[1]
-      --driver-memory 512m
-      --executor-memory 512m
-      --conf spark.executor.cores=1
-      --conf spark.driver.maxResultSize=512m
-      --packages io.delta:delta-spark_2.12:3.1.0
-      --conf spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension
-      --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog
-      /opt/app/pipelines/jobs/streaming/spark_predictions.py
-    depends_on:
-      - api
-      - spark-streaming
-      - mlflow
-    restart: always
-  
   spark:
     <<: *spark-base
     user: "0:0"
     working_dir: /opt/app
     command: tail -f /dev/null
-    restart: unless-stopped
+    restart: always
 
   # =========================
   # 🟢 AIRFLOW

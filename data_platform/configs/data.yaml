@@ -1,8 +1,7 @@
 # configs/data.yaml
 
-interval: "1m"
-start_date: "2026-04-01"
-state_date: "2026-04-01"
+interval: "5m"
+start_date: "2026-01-01"
 
 tables:
     bronze_market:
@@ -17,8 +16,11 @@ tables:
         "path": "/opt/app/delta/gold/market/"
         "partition_by": ["symbol", "date"]
 
-    market_state:
-        "path": "/opt/app/delta/state/market/"
+    market_batch_state:
+        "path": "/opt/app/delta/state/market_batch/"
+
+    market_stream_state:
+        "path": "/opt/app/delta/state/market_stream/"
 
     predictions_log_return_lead1:
         "path": "/opt/app/delta/predictions/log_return_lead1/"

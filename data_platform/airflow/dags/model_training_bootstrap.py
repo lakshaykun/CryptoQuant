@@ -1,15 +1,11 @@
-# airflow/dags/model_training_pipeline.py
+# airflow/dags/model_training_bootstrap.py
 
 from airflow import DAG
 from airflow.operators.python import PythonOperator
+from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 from datetime import datetime, timedelta
 from airflow.models import Variable
-from airflow.exceptions import AirflowSkipException
 
-
-def check_enabled():
-    if Variable.get("model_training_enabled", default_var="false") != "true":
-        raise AirflowSkipException("Model training not enabled yet")
 
 # Task wrapper functions to avoid import issues in Airflow
 def validate_schema_task_wrapper():
@@ -28,19 +24,17 @@ def feature_engineering_task_wrapper():
     from models.features.feature_engineering import feature_engineering
     feature_engineering()
 
+def enable_pipeline_var():
+    Variable.set("model_training_enabled", "true")
+
 with DAG(
-    dag_id="model_training_pipeline",
+    dag_id="model_training_bootstrap",
     start_date=datetime(2024, 1, 1),
-    schedule=timedelta(minutes=20),
+    schedule=None,
     catchup=False,
     max_active_runs=1,
     is_paused_upon_creation=False
 ) as dag:
-
-    check_enabled_task = PythonOperator(
-        task_id="check_enabled",
-        python_callable=check_enabled,
-    )
 
     load_data_task = PythonOperator(
         task_id="load_data",
@@ -63,4 +57,14 @@ with DAG(
         execution_timeout=timedelta(minutes=20),
     )
 
-    check_enabled_task >> load_data_task >> validate_schema_task >> feature_engineering_task >> train_model_task
+    enable_pipeline_var_task = PythonOperator(
+        task_id="enable_pipeline",
+        python_callable=enable_pipeline_var,
+    )
+
+    trigger_predictions = TriggerDagRunOperator(
+        task_id="trigger_predictions",
+        trigger_dag_id="batch_predictions_bootstrap"
+    )
+
+    load_data_task >> validate_schema_task >> feature_engineering_task >> train_model_task >> enable_pipeline_var_task  >> trigger_predictions

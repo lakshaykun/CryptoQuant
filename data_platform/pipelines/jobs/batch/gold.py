@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
 
-from pipelines.schema.state.market import STATE_MARKET_SCHEMA
+from pipelines.schema.state.market_batch import STATE_MARKET_SCHEMA
 from pipelines.storage.delta.reader import get_last_processed_time_symbols, read_incremental_symbols
 from pipelines.transformers.gold.market import GoldMarketTransformer
 from pipelines.storage.delta.writer import write_batch
@@ -33,7 +33,7 @@ def main():
 
         state_checkpoint_symbols = get_last_processed_time_symbols(
             spark,
-            "market_state",
+            "market_batch_state",
             symbols,
             state_date,
         )
@@ -78,7 +78,7 @@ def main():
 
         write_batch(
             state_df,
-            "market_state",
+            "market_batch_state",
             STATE_MARKET_SCHEMA,
             mode="overwrite",
             upsert=False,
