@@ -3,7 +3,7 @@ services:
     image: timescale/timescaledb:latest-pg16
     container_name: crypto-timescaledb
     ports:
-      - "5433:5432"
+      - "5434:5432"
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_USER: ${POSTGRES_USER}
@@ -14,14 +14,14 @@ services:
   delta-sync:
     build:
       context: .
-      dockerfile: delta-sync/Dockerfile
+      dockerfile: delta_sync/Dockerfile
     container_name: crypto-delta-sync
     depends_on:
       - timescaledb
     env_file:
       - .env
     volumes:
-      - ./data_platform/medallion:/app/medallion
+      - ${GOLD_MARKET_PATH}:/app/medallion
 
   dashboard-api:
     build:
@@ -36,5 +36,4 @@ services:
       - .env
 
 volumes:
-  kafka-data:
   timescaledb-data:

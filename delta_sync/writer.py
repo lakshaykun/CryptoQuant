@@ -1,6 +1,6 @@
 import asyncpg
 import pandas as pd
-from pipelines.utils.logger import get_logger
+from data_platform.utils_global.logger import get_logger
 
 logger = get_logger(__name__)
 

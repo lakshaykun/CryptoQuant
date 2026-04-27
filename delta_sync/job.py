@@ -2,8 +2,8 @@ import os
 import datetime
 import asyncpg
 from dotenv import load_dotenv
-from pipelines.serving import reader, writer
-from pipelines.utils.logger import get_logger
+from delta_sync import reader, writer
+from data_platform.utils_global.logger import get_logger
 
 load_dotenv()
 

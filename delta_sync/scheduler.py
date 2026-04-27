@@ -1,8 +1,8 @@
 import asyncio
 import os
 from dotenv import load_dotenv
-from pipelines.serving.job import run
-from pipelines.utils.logger import get_logger
+from delta_sync.job import run
+from data_platform.utils_global.logger import get_logger
 
 load_dotenv()
 

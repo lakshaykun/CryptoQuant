@@ -1,12 +1,12 @@
 import datetime
 import pandas as pd
 from deltalake import DeltaTable
-from pipelines.utils.logger import get_logger
-from pipelines.utils.config_loader import load_config
+from data_platform.utils_global.logger import get_logger
+from data_platform.utils_global.config_loader import load_config
 
 logger = get_logger(__name__)
 
-CONFIG = load_config("configs/data.yaml")
+CONFIG = load_config("data_platform/configs/data.yaml")
 
 
 def get_gold_path() -> str:
