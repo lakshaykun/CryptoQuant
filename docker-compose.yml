@@ -11,17 +11,30 @@ services:
     volumes:
       - timescaledb-data:/var/lib/postgresql/data
 
-  delta-sync:
+  delta-market-sync:
     build:
       context: .
-      dockerfile: delta_sync/Dockerfile
-    container_name: crypto-delta-sync
+      dockerfile: delta_sync/market/Dockerfile
+    container_name: crypto-delta-market-sync
     depends_on:
       - timescaledb
     env_file:
       - .env
     volumes:
-      - ${GOLD_MARKET_PATH}:/app/medallion
+      - ${GOLD_MARKET_PATH}:${GOLD_MARKET_PATH}
+
+  delta-sentiment-sync:
+    build:
+      context: .
+      dockerfile: delta_sync/sentiment/Dockerfile
+    container_name: crypto-delta-sentiment-sync
+    depends_on:
+      - timescaledb
+    env_file:
+      - .env
+    volumes:
+      - ${GOLD_SENTIMENT_PATH}:${GOLD_SENTIMENT_PATH}
+      - ${SILVER_SENTIMENT_PATH}:${SILVER_SENTIMENT_PATH}
 
   dashboard-api:
     build:

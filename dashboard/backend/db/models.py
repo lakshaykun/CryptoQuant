@@ -54,3 +54,22 @@ class Prediction(Base):
     actual_close     : Mapped[float]     = mapped_column(Double, nullable=True)  # filled in later
     error            : Mapped[float]     = mapped_column(Double, nullable=True)  # actual - predicted, filled in later
     direction_correct: Mapped[bool]      = mapped_column(Boolean, nullable=True) # filled in later
+
+class SentimentGold(Base):
+    __tablename__ = "sentiment_gold"
+
+    window_start    : Mapped[datetime]  = mapped_column(sa.TIMESTAMP(timezone=True), primary_key=True)
+    symbol          : Mapped[str]       = mapped_column(Text, primary_key=True)
+    sentiment_index : Mapped[float]     = mapped_column(Double, nullable=True)
+    avg_confidence  : Mapped[float]     = mapped_column(Double, nullable=True)
+    message_count   : Mapped[int]       = mapped_column(Integer, nullable=True)
+    window_date     : Mapped[date_type] = mapped_column(Date, nullable=False)
+
+
+class SentimentSilver(Base):
+    __tablename__ = "sentiment_silver"
+
+    event_time  : Mapped[datetime] = mapped_column(sa.TIMESTAMP(timezone=True), primary_key=True)
+    symbol      : Mapped[str]      = mapped_column(Text, primary_key=True)
+    source      : Mapped[str]      = mapped_column(Text, primary_key=True)
+    engagement  : Mapped[int]      = mapped_column(Integer, nullable=True)
