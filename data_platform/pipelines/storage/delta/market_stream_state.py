@@ -31,7 +31,7 @@ def load_last_offsets(spark, table_name="market_stream_state"):
             if topic not in result:
                 result[topic] = {}
 
-            result[topic][str(partition)] = offset + 1  # start from next
+            result[topic][str(partition)] = int(offset) + 1 if offset is not None else -2
 
         return result
 

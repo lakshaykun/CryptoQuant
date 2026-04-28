@@ -1,18 +1,6 @@
 # docker-compose.yml
-name: cryptoquant
 
-x-spark-base: &spark-base
-  build:
-    dockerfile: docker/spark/Dockerfile
-  environment:
-    - PYTHONPATH=/opt/app
-    - PATH=/opt/spark/bin:$PATH
-    - MLFLOW_TRACKING_URI=http://mlflow:5000
-    - PREDICTION_API_URL=http://api:8000/predict
-  volumes:
-    - .:/opt/app
-    - spark-ivy:/root/.ivy2
-    - mlflow-data:/mlflow
+name: cryptoquant
 
 services:
   # =========================
@@ -106,11 +94,21 @@ services:
   # 🔵 SPARK
   # =========================
   spark:
-    <<: *spark-base
+    build:
+      dockerfile: docker/spark/Dockerfile
     user: "0:0"
     working_dir: /opt/app
+    environment:
+      - PYTHONPATH=/opt/app
+      - PATH=/opt/spark/bin:$PATH
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - PREDICTION_API_URL=http://api:8000/predict
     command: tail -f /dev/null
     restart: always
+    volumes:
+      - .:/opt/app
+      - spark-ivy:/root/.ivy2
+      - mlflow-data:/mlflow
 
   # =========================
   # 🟢 AIRFLOW
@@ -152,6 +150,7 @@ services:
       - .:/opt/app
       - /var/run/docker.sock:/var/run/docker.sock
     command: webserver
+    restart: always
 
   airflow-scheduler:
     build:
@@ -178,6 +177,7 @@ services:
       - .:/opt/app
       - /var/run/docker.sock:/var/run/docker.sock
     command: scheduler
+    restart: always
   
   # =========================
   # 🟢 MLFLOW

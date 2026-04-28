@@ -18,57 +18,53 @@ GOLD_MARKET_SCHEMA = StructType([
     StructField("trades", IntegerType(), True),
     StructField("taker_buy_base", DoubleType(), True),
 
-    # returns & volatility
-    StructField("log_return", DoubleType(), True),
-    StructField("volatility", DoubleType(), True),
+    # derived features
+    StructField("hl_range", DoubleType()),     # (high - low)
+    StructField("vwap_proxy", DoubleType()),   # (high+low+close)/3
+
+    # returns (clean)
+    StructField("log_return_lag1", DoubleType()),
+    StructField("return_5", DoubleType()),
+    StructField("return_zscore", DoubleType()),
+    StructField("return_acceleration", DoubleType()),
+    StructField("smoothed_return_3", DoubleType()),
+
+    # volatility
+    StructField("volatility", DoubleType()),
+    StructField("volatility_5", DoubleType()),
+    StructField("volatility_std_10", DoubleType()),
+    StructField("volatility_ratio", DoubleType()),
+    StructField("volatility_regime", DoubleType()),
 
     # microstructure
-    StructField("imbalance_ratio", DoubleType(), True),
-    StructField("buy_ratio", DoubleType(), True),
+    StructField("imbalance_ratio", DoubleType()),
+    StructField("imbalance_change", DoubleType()),
+    StructField("imbalance_momentum", DoubleType()),
+    StructField("buy_ratio", DoubleType()),
+    StructField("buy_pressure_change", DoubleType()),
 
-    # lag features
-    StructField("log_return_lag1", DoubleType(), True),
-    StructField("log_return_lag2", DoubleType(), True),
-    StructField("buy_ratio_lag1", DoubleType(), True),
+    # price positioning
+    StructField("price_to_ma_5", DoubleType()),
+    StructField("price_to_ma_20", DoubleType()),
+    StructField("ma_cross_5_20", DoubleType()),
 
-    # moving averages
-    StructField("ma_5", DoubleType(), True),
-    StructField("ma_20", DoubleType(), True),
-    StructField("ma_50", DoubleType(), True),
+    # momentum
+    StructField("momentum_ratio", DoubleType()),
 
-    # rolling stats
-    StructField("volatility_5", DoubleType(), True),
-    StructField("volume_5", DoubleType(), True),
-    StructField("buy_ratio_5", DoubleType(), True),
-    StructField("volatility_std_10", DoubleType(), True),
+    # volume
+    StructField("volume_spike", DoubleType()),
+    StructField("volume_ratio", DoubleType()),
+    StructField("volume_trend", DoubleType()),
+    StructField("trades_ratio", DoubleType()),
 
-    # return features
-    StructField("return_5", DoubleType(), True),
-    StructField("return_20", DoubleType(), True),
+    # candle structure
+    StructField("body_size", DoubleType()),
+    StructField("close_position", DoubleType()),
+    StructField("range_ratio", DoubleType()),
 
-    # derived signals
-    StructField("momentum_ratio", DoubleType(), True),
-    StructField("volume_spike", DoubleType(), True),
-    StructField("body_size", DoubleType(), True),
-    StructField("volatility_ratio", DoubleType(), True),
-
-    # trend features
-    StructField("trend_strength", DoubleType(), True),
-    StructField("trend_long", DoubleType(), True),
-    StructField("trend_regime", IntegerType(), True),
-
-    # microstructure dynamics
-    StructField("imbalance_change", DoubleType(), True),
-
-    # interactions
-    StructField("volatility_momentum", DoubleType(), True),
-
-    # mean reversion
-    StructField("price_deviation", DoubleType(), True),
-
-    # time features (encoded)
-    StructField("hour_sin", DoubleType(), True),
-    StructField("hour_cos", DoubleType(), True),
+    # time
+    StructField("hour_sin", DoubleType()),
+    StructField("hour_cos", DoubleType()),
 
     # metadata
     StructField("is_valid_feature_row", BooleanType(), True),

@@ -10,6 +10,7 @@ xgboost==1.7.5
 catboost==1.2.5
 lightgbm==4.3.0
 requests==2.31.0
+optuna==3.6.1
 
 deltalake==0.17.0
 pyarrow==14.0.2

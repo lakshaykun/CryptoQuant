@@ -17,9 +17,14 @@ def train_model():
 
     df = df.dropna()
 
-    train_df, test_df = time_split(df)
+    train_df, val_df, test_df = time_split(
+                                    df, 
+                                    config["time_split_days"]['train'], 
+                                    config["time_split_days"]['val'], 
+                                    config["time_split_days"]['test']
+                                )
 
     trainer = Trainer(config, logger)
-    trainer.train(train_df, test_df)
+    trainer.train(train_df, val_df, test_df)
 
     logger.info(f"Models trained and registered successfully")

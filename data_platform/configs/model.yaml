@@ -13,160 +13,212 @@ expected_columns : [
     'trades',
     'taker_buy_base',
 
-    # returns & volatility
-    'log_return',
-    'volatility',
-
-    # microstructure
-    'imbalance_ratio',
-    'buy_ratio',
-
-    # lags
-    'log_return_lag1',
-    'log_return_lag2',
-    'buy_ratio_lag1',
-
-    # moving averages
-    'ma_5',
-    'ma_20',
-    'ma_50',
-
-    # rolling stats
-    'volatility_5',
-    'volume_5',
-    'buy_ratio_5',
-    'volatility_std_10',
-
-    # return features
-    'return_5',
-    'return_20',
-
-    # derived signals
-    'momentum_ratio',
-    'volume_spike',
-    'body_size',
-    'volatility_ratio',
-
-    # trend
-    'trend_strength',
-    'trend_long',
-    'trend_regime',
-
-    # microstructure dynamics
-    'imbalance_change',
-
-    # interactions
-    'volatility_momentum',
-
-    # mean reversion
-    'price_deviation',
-
-    # time encoding
-    'hour_sin',
-    'hour_cos',
-
-    # metadata
-    'is_valid_feature_row'
-]
-
-features : [
-    'symbol',
+    # derived base
+    'hl_range',
+    'vwap_proxy',
 
     # returns
-    'log_return',
     'log_return_lag1',
-    'log_return_lag2',
     'return_5',
-    'return_20',
+    'return_zscore',
+    'return_acceleration',
+    'smoothed_return_3',
 
     # volatility
     'volatility',
     'volatility_5',
     'volatility_std_10',
     'volatility_ratio',
+    'volatility_regime',
 
     # microstructure
     'imbalance_ratio',
     'imbalance_change',
+    'imbalance_momentum',
     'buy_ratio',
-    'buy_ratio_5',
-    'buy_ratio_lag1',
+    'buy_pressure_change',
 
-    # trend
-    'ma_5',
-    'ma_20',
-    'ma_50',
-    'trend_strength',
-    'trend_long',
+    # price positioning
+    'price_to_ma_5',
+    'price_to_ma_20',
+    'ma_cross_5_20',
 
     # momentum
     'momentum_ratio',
 
-    # volume dynamics
+    # volume & activity
     'volume_spike',
+    'volume_ratio',
+    'volume_trend',
+    'trades_ratio',
 
-    # price structure
+    # candle structure
     'body_size',
-    'price_deviation',
+    'close_position',
+    'range_ratio',
 
-    # interactions
-    'volatility_momentum',
-
-    # time encoding
+    # time
     'hour_sin',
-    'hour_cos'
+    'hour_cos',
+
+    # metadata
+    'is_valid_feature_row',
+    'date',
+    'ingestion_time'
+]
+
+features : [
+    # 'symbol',
+
+    # derived base
+    'hl_range',
+    'vwap_proxy',
+
+    # returns
+    'log_return_lag1',
+    'return_5',
+    'return_zscore',
+    'return_acceleration',
+    'smoothed_return_3',
+
+    # volatility
+    'volatility',
+    'volatility_5',
+    'volatility_std_10',
+    'volatility_ratio',
+    'volatility_regime',
+
+    # microstructure
+    'imbalance_ratio',
+    'imbalance_change',
+    'imbalance_momentum',
+    'buy_ratio',
+    'buy_pressure_change',
+
+    # price positioning
+    'price_to_ma_5',
+    'price_to_ma_20',
+    'ma_cross_5_20',
+
+    # momentum
+    'momentum_ratio',
+
+    # volume & activity
+    'volume_spike',
+    'volume_ratio',
+    'volume_trend',
+    'trades_ratio',
+
+    # candle structure
+    'body_size',
+    'close_position',
+    'range_ratio',
+
+    # time
+    'hour_sin',
+    'hour_cos',
 ]
 
 target: "log_return_lead1"
 
-test_split_ratio: 0.2
+time_split_days:
+    train: 120
+    val: 14
+    test: 7
+
+tuning:
+  enabled: true
+  n_trials: 30
+
+training:
+  decay_days: 30
+
+optimization_metric: rmse
 
 train_data_path: "models/artifacts/train_data.parquet"
 
 model_params:
     xgboost:
-        n_estimators: 800
-        max_depth: 5
-        learning_rate: 0.02
-        subsample: 0.7
-        colsample_bytree: 0.7
-        reg_alpha: 0.5
-        reg_lambda: 1.0
+        n_estimators: 1200
+        max_depth: 6
+        learning_rate: 0.035
+
+        subsample: 0.8
+        colsample_bytree: 0.8
+
+        reg_alpha: 0.1
+        reg_lambda: 1.5
+
+        min_child_weight: 2
+        gamma: 0.05
+
         tree_method: hist
-        min_child_weight: 5
-        gamma: 0.1
+        max_bin: 256
+
+        grow_policy: lossguide
+        max_leaves: 64
+
         n_jobs: 1
         random_state: 42
 
     catboost:
-        iterations: 1000
-        learning_rate: 0.02
-        depth: 5
-        l2_leaf_reg: 5
+        iterations: 1500
+        learning_rate: 0.03
+        depth: 6
+
+        l2_leaf_reg: 3
+
         loss_function: RMSE
         eval_metric: RMSE
+
         bootstrap_type: Bernoulli
-        subsample: 0.7
-        rsm: 0.7
+        subsample: 0.8
+        rsm: 0.8
+
+        grow_policy: SymmetricTree
+
         od_type: Iter
         od_wait: 100
-        verbose: False
+
         random_state: 42
+        verbose: False
 
     lightgbm:
-        n_estimators: 800
-        learning_rate: 0.03
-        num_leaves: 31
+        n_estimators: 1200
+        learning_rate: 0.035
+
+        num_leaves: 63
         max_depth: -1
-        min_data_in_leaf: 50
-        subsample: 0.7
-        colsample_bytree: 0.7
-        reg_alpha: 0.5
-        reg_lambda: 1.0
+
+        min_data_in_leaf: 30
+
+        subsample: 0.8
+        colsample_bytree: 0.8
+
+        reg_alpha: 0.1
+        reg_lambda: 1.5
+
+        max_bin: 255
+        feature_fraction: 0.8
+        bagging_freq: 1
+
         n_jobs: 1
         random_state: 42
 
-model_name: "crypto-return-predictor"
+
+search_space:
+  xgboost:
+    max_depth: [4, 10]
+    learning_rate: [0.01, 0.2]
+    subsample: [0.6, 1.0]
+
+  lightgbm:
+    num_leaves: [31, 127]
+    learning_rate: [0.01, 0.2]
+
+  catboost:
+    depth: [4, 10]
+    learning_rate: [0.01, 0.2]
 
 monitoring:
     drift:

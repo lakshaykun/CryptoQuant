@@ -4,5 +4,3 @@ brokers: "kafka:9092"
 
 topics:
   market_stream: crypto_prices
-  
-  predictions: crypto_predictions

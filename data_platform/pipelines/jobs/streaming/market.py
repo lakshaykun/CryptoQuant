@@ -1,3 +1,5 @@
+# pipelines/jobs/streaming/market.py
+
 import time
 
 from pipelines.utils.spark import get_spark
@@ -41,10 +43,10 @@ def run():
     # -----------------------------
     df, topic = get_kafka_batch(spark, kafkaConfig["topics"]["market_stream"], kafkaConfig["brokers"], offsets)
 
-    if df.rdd.isEmpty():
+    if df.head(1) == []:
         logger.info("[batch] No new data")
         return
-
+    
     parsed = parse_kafka_message(df, RAW_MARKET_SCHEMA)
 
     # -----------------------------

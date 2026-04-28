@@ -26,7 +26,8 @@ def prepare_predictions_frame(
 
     subset = subset.sort_values(["symbol", "open_time"])
 
-    target_frame = gold_frame[["symbol", "open_time", "close", "log_return"]].copy()
+    target_frame = gold_frame[["symbol", "open_time", "close"]].copy()
+    target_frame["log_return"] = np.log(target_frame["close"] / target_frame.groupby("symbol")["close"].shift(1))
     target_frame = target_frame.sort_values(["symbol", "open_time"])
     target_frame["actual_close"] = target_frame.groupby("symbol")["close"].shift(-1)
     target_frame["actual_log_return_lead1"] = target_frame.groupby("symbol")["log_return"].shift(-1)

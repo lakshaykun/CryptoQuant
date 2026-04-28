@@ -3,6 +3,7 @@
 from airflow import DAG
 from airflow.operators.bash import BashOperator
 from datetime import datetime, timedelta
+from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 
 
 def build_spark_submit(task_script):
@@ -25,7 +26,7 @@ with DAG(
     is_paused_upon_creation=False
 ) as dag:
 
-    predict = BashOperator(
+    ingest = BashOperator(
         task_id="market_stream",
         bash_command=build_spark_submit(
             "pipelines/jobs/streaming/market.py"
@@ -33,3 +34,10 @@ with DAG(
         retries=2,
         retry_delay=timedelta(seconds=10),
     )
+
+    trigger_predictions = TriggerDagRunOperator(
+        task_id="trigger_stream_pipeline",
+        trigger_dag_id="stream_predictions_pipeline",
+    )
+
+    ingest >> trigger_predictions

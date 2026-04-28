@@ -47,6 +47,7 @@ def main(df=None):
 
     try:
         config = load_config("configs/data.yaml")
+        modelConfig = load_config("configs/model.yaml")
         symbols = config.get("symbols") or []
         state_date_value = config.get("state_date") or config.get("start_date")
 
@@ -75,6 +76,9 @@ def main(df=None):
             return
 
         df = df.filter(F.col("is_valid_feature_row") == True)
+
+        # drop nulls in feature columns
+        df = df.dropna(subset=modelConfig.get("features", []))
 
         if df.rdd.isEmpty():
             logger.info("No valid feature rows to predict, skipping write")

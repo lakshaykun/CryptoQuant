@@ -64,7 +64,7 @@ with DAG(
 
     trigger_predictions = TriggerDagRunOperator(
         task_id="trigger_predictions",
-        trigger_dag_id="batch_predictions_bootstrap"
+        trigger_dag_id="batch_predictions_pipeline"
     )
 
     load_data_task >> validate_schema_task >> feature_engineering_task >> train_model_task >> enable_pipeline_var_task  >> trigger_predictions

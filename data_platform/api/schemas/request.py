@@ -7,11 +7,16 @@ from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
 
+from pydantic import BaseModel
+from datetime import datetime
+from typing import Optional
+
+
 class CryptoFeatures(BaseModel):
     open_time: datetime
     symbol: str = "BTCUSDT"
 
-    # core
+    # core (minimal required)
     open: float
     high: float
     low: float
@@ -20,59 +25,55 @@ class CryptoFeatures(BaseModel):
     trades: int
     taker_buy_base: float
 
-    # returns & volatility
-    log_return: float
+    # derived base
+    hl_range: float
+    vwap_proxy: float
+
+    # returns
+    log_return_lag1: float
+    return_5: float
+    return_zscore: float
+    return_acceleration: float
+    smoothed_return_3: float
+
+    # volatility
     volatility: float
+    volatility_5: float
+    volatility_std_10: float
+    volatility_ratio: float
+    volatility_regime: float
 
     # microstructure
     imbalance_ratio: float
-    buy_ratio: float
-
-    # lags
-    log_return_lag1: float
-    log_return_lag2: float
-    buy_ratio_lag1: float
-
-    # moving averages
-    ma_5: float
-    ma_20: float
-    ma_50: float
-
-    # rolling stats
-    volatility_5: float
-    volume_5: float
-    buy_ratio_5: float
-    volatility_std_10: float
-
-    # return features
-    return_5: float
-    return_20: float
-
-    # derived signals
-    momentum_ratio: float
-    volume_spike: float
-    body_size: float
-    volatility_ratio: float
-
-    # trend
-    trend_strength: float
-    trend_long: float
-    trend_regime: int
-
-    # microstructure dynamics
     imbalance_change: float
+    imbalance_momentum: float
+    buy_ratio: float
+    buy_pressure_change: float
 
-    # interactions
-    volatility_momentum: float
+    # price positioning
+    price_to_ma_5: float
+    price_to_ma_20: float
+    ma_cross_5_20: float
 
-    # mean reversion
-    price_deviation: float
+    # momentum
+    momentum_ratio: float
+
+    # volume & activity
+    volume_spike: float
+    volume_ratio: float
+    volume_trend: float
+    trades_ratio: float
+
+    # candle structure
+    body_size: float
+    close_position: float
+    range_ratio: float
 
     # time encoding
     hour_sin: float
     hour_cos: float
 
-    # optional (for evaluation only)
+    # optional (evaluation / backtesting only)
     actual_log_return_lead1: Optional[float] = None
 
 

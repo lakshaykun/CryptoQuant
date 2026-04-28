@@ -11,7 +11,7 @@ def build_spark_submit(task_script):
     return f"""
     docker exec cryptoquant-spark-1 spark-submit \
       --master local[2] \
-      --packages io.delta:delta-spark_2.12:3.1.0 \
+      --packages io.delta:delta-spark_2.12:3.2.0 \
       --conf spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension \
       --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog \
       /opt/app/{task_script}
@@ -31,7 +31,8 @@ with DAG(
         bash_command=build_spark_submit(
             "pipelines/jobs/batch/ingest.py"
         ),
-        retries=1,
+        retries=3,
+        retry_delay=timedelta(seconds=10),
     )
 
     ingest_today = BashOperator(
