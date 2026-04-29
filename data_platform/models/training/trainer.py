@@ -8,6 +8,7 @@ import xgboost as xgb
 import lightgbm as lgb
 from catboost import CatBoostRegressor, CatBoostClassifier
 
+from models.config_utils import resolve_task_algorithm_config
 from models.evaluation.task_evaluators import evaluate_regression, evaluate_classification
 from models.data.splitter import resolve_model_split_config, split_for_model
 from models.registry.mlflow_registery import (
@@ -132,7 +133,7 @@ class Trainer:
         best_report = None
 
         for algo_name, model_cls in registry.items():
-            base_params = dict(model_params.get(algo_name, {}))
+            base_params = resolve_task_algorithm_config(model_params, task_type, algo_name)
             if task_type == "classification":
                 base_params = self._inject_classification_params(algo_name, base_params, task_cfg)
 
@@ -307,7 +308,7 @@ class Trainer:
         if not self.config.get("tuning", {}).get("enabled", False):
             return {}
 
-        search_space = self.config.get("search_space", {}).get(algo_name, {})
+        search_space = resolve_task_algorithm_config(self.config.get("search_space", {}), task_type, algo_name)
         if not search_space:
             return {}
 

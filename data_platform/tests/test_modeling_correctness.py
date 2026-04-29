@@ -4,6 +4,7 @@ import joblib
 import numpy as np
 import pandas as pd
 
+from models.config_utils import get_available_algorithms, resolve_task_algorithm_config
 from models.features.feature_engineering import _compute_sign
 from models.inference.pipeline import InferencePipeline
 from models.utils.horizon import compute_steps_per_day, parse_interval, resolve_horizon_steps
@@ -70,3 +71,28 @@ def test_mlflow_naming_contract():
     algo = "xgboost"
     model_name = f"cryptoquant.{task}.{interval}.{algo}"
     assert model_name == "cryptoquant.return_short.5m.xgboost"
+
+
+def test_task_specific_model_params_resolution():
+    section = {
+        "regression": {
+            "xgboost": {"objective": "reg:squarederror", "n_estimators": 100},
+        },
+        "classification": {
+            "xgboost": {"objective": "multi:softprob", "num_class": 3},
+        },
+    }
+
+    assert resolve_task_algorithm_config(section, "regression", "xgboost")["objective"] == "reg:squarederror"
+    assert resolve_task_algorithm_config(section, "classification", "xgboost")["objective"] == "multi:softprob"
+
+
+def test_available_algorithms_from_nested_config():
+    model_config = {
+        "model_params": {
+            "regression": {"xgboost": {}, "lightgbm": {}},
+            "classification": {"xgboost": {}, "catboost": {}},
+        }
+    }
+
+    assert get_available_algorithms(model_config) == ["xgboost", "lightgbm", "catboost"]

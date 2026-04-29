@@ -1,4 +1,5 @@
 from models.inference.pipeline import InferencePipeline
+from models.config_utils import get_available_algorithms
 from models.registry.model_loader import load_model
 from utils_global.config_loader import load_config
 from utils_global.logger import get_logger
@@ -12,7 +13,7 @@ class RealtimePredictor:
     def __init__(self):
         interval = data_config.get("interval", "unknown")
         tasks = model_config.get("models", {})
-        algos = list((model_config.get("model_params") or {}).keys()) or ["xgboost", "lightgbm", "catboost"]
+        algos = get_available_algorithms(model_config)
 
         if not tasks:
             self.models = {"prediction": load_model(logger)}

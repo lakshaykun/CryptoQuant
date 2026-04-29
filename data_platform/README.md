@@ -5,13 +5,13 @@ CryptoQuant is a crypto market MLOps workspace for Binance market data. The proj
 ## Project Layout
 
 - [api/](api/) - FastAPI prediction service and request schemas.
-- [airflow/](airflow/) - DAGs for batch data, batch predictions, model training, and drift monitoring.
+- [airflow/](airflow/) - DAGs for batch data, streaming sync, batch predictions, model training, and drift monitoring.
 - [dashboard/](dashboard/) - Streamlit monitoring and research dashboard.
-- [docker/](docker/) - container images for the API, Airflow, Spark, dashboard, and stream producer.
+- [docker/](docker/) - Container images for the API, Airflow, Spark, Kafka, and stream producer.
 - [models/](models/) - data loading, feature engineering, training, evaluation, inference, and registry helpers.
-- [pipelines/](pipelines/) - batch and streaming ingestion jobs, Spark jobs, schemas, storage, and validation.
+- [pipelines/](pipelines/) - Medallion ETL jobs, streaming ingestion, schemas, storage, and validation.
 - [configs/](configs/) - YAML configuration for data, Kafka, Spark, and model settings.
-- [delta/](delta/) - local Delta Lake storage for raw, bronze, silver, gold, predictions, checkpoints, and state.
+- [delta/](delta/) - Local Delta Lake storage for raw_data, bronze, silver, gold, predictions, and state.
 - [scripts/](scripts/) - thin launch scripts for local development.
 - [docs/](docs/) - architecture, commands, and data documentation.
 

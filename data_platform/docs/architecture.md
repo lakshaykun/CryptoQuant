@@ -57,32 +57,33 @@ The tree below is truncated to the directories and files that define the current
 │   ├── README.md  # Airflow notes
 │   └── dags/
 │       ├── batch_data_pipeline.py  # batch DAG
-│       ├── batch_predictions_pipeline.py  # batch prediction DAG
 │       ├── drift_monitor_pipeline.py  # drift monitor DAG
 │       ├── model_training_pipeline.py  # training DAG
-│       └── monitoring_callbacks.py  # Airflow run logging callbacks
+│       ├── predictions_pipeline.py  # prediction DAG
+│       ├── stream_data_pipeline.py  # streaming management DAG
+│       └── utils.py  # DAG helpers
 
 ├── api/  # prediction service
 │   ├── README.md  # API notes
 │   ├── app.py  # FastAPI app
 │   └── schemas/
-│       ├── model.py  # shared Pydantic models
 │       └── request.py  # request payload models
 
+├── dashboard/  # monitoring dashboard
+│   ├── app.py  # Streamlit app
+│   ├── charts.py  # visualization components
+│   ├── data_service.py  # data access layer
+│   ├── delta_client.py  # Delta Lake interface
+│   ├── mlflow_client.py  # MLflow interface
+│   └── settings.py  # dashboard config
+│
 ├── docker/  # container images
-│   ├── airflow/
-│   │   ├── Dockerfile  # Airflow image
-│   │   ├── entrypoint.sh  # Airflow entrypoint
-│   │   └── requirements.txt  # Airflow dependencies
-│   ├── api/
-│   │   ├── Dockerfile  # API image
-│   │   └── requirements.txt  # API dependencies
-│   ├── spark/
-│   │   ├── Dockerfile  # Spark image
-│   │   └── requirements.txt  # Spark dependencies
-│   └── stream_producer/
-│       ├── Dockerfile  # stream producer image
-│       └── requirements.txt  # stream producer dependencies
+│   ├── airflow/  # Airflow image
+│   ├── api/  # API image
+│   ├── dashboard/  # Dashboard image
+│   ├── kafka/  # Kafka init image
+│   ├── spark/  # Spark image
+│   └── stream-producer/  # Stream producer image
 
 ├── configs/  # runtime config
 │   ├── README.md  # config notes
@@ -92,19 +93,14 @@ The tree below is truncated to the directories and files that define the current
 │   └── spark.yaml  # Spark settings
 
 ├── delta/  # Delta Lake tables
-│   ├── bronze/
-│   │   └── market/  # bronze market data
-│   ├── checkpoints/  # structured streaming checkpoints
-│   ├── gold/
-│   │   └── market/  # gold feature data
-│   ├── predictions/
-│   │   └── log_return_lead1/  # prediction outputs
-│   ├── raw_data/
-│   │   └── market/  # raw CSV staging
-│   ├── silver/
-│   │   └── market/  # silver cleaned data
+│   ├── bronze/market/  # bronze market data
+│   ├── gold/market/  # gold feature data
+│   ├── predictions/log_return_lead1/  # prediction outputs
+│   ├── raw_data/market/  # raw CSV staging
+│   ├── silver/market/  # silver cleaned data
 │   └── state/
-│       ├── market/  # incremental market state
+│       ├── market_batch/  # incremental batch state
+│       ├── market_stream/  # incremental stream state
 │       └── monitoring/  # drift history and retraining state
 
 ├── docs/  # documentation
@@ -121,31 +117,33 @@ The tree below is truncated to the directories and files that define the current
 
 ├── models/  # ML package
 │   ├── README.md  # model notes
-│   ├── artifacts/
-│   │   └── models/  # saved models
+│   ├── artifacts/  # saved models and maps
 │   ├── data/
 │   │   ├── loader.py  # load training data
-│   │   ├── schema.py  # validate data schema
-│   │   └── splitter.py  # time split helper
+│   │   ├── splitter.py  # time split helper
+│   │   └── validater.py  # data validation
 │   ├── evaluation/
 │   │   ├── backtesting.py  # backtest logic
 │   │   ├── evaluate.py  # model evaluation
-│   │   └── metrics.py  # metric helpers
+│   │   └── task_evaluators.py  # task-specific metrics
 │   ├── features/
-│   │   └── build_features.py  # pandas features
+│   │   ├── build_features.py  # feature pipeline
+│   │   └── feature_engineering.py  # feature logic
 │   ├── inference/
+│   │   ├── api_client.py  # API client for inference
 │   │   ├── pipeline.py  # inference pipeline
 │   │   └── realtime.py  # runtime predictor
 │   ├── monitoring/
-│   │   ├── __init__.py  # monitoring package marker
 │   │   └── drift.py  # drift detection and retraining trigger
 │   ├── registry/
 │   │   ├── mlflow_registery.py  # MLflow logging
 │   │   └── model_loader.py  # local model loader
-│   └── training/
-│       ├── hyperparameter_tuning.py  # tuning helper
-│       ├── train.py  # train entrypoint
-│       └── trainer.py  # model trainer
+│   ├── training/
+│   │   ├── train.py  # train entrypoint
+│   │   └── trainer.py  # model trainer
+│   ├── utils/
+│   │   └── horizon.py  # time horizon helpers
+│   └── config_utils.py  # model config helpers
 
 ├── notebooks/  # exploration notebooks
 │   ├── data_ingest.ipynb  # ingest notebook
@@ -154,72 +152,17 @@ The tree below is truncated to the directories and files that define the current
 ├── monitoring/  # platform monitoring assets (drift state under delta/state)
 
 ├── pipelines/  # data pipeline code
-│   ├── README.md  # pipeline notes
 │   ├── ingestion/
-│   │   ├── batch/
-│   │   │   ├── jobs/
-│   │   │   │   └── market/
-│   │   │   │       ├── fetch_historical.py  # historical fetcher
-│   │   │   │       └── fetch_today.py  # live-day fetcher
-│   │   │   └── sources/
-│   │   │       └── market/
-│   │   │           ├── binance_historical.py  # Binance ZIP source
-│   │   │           └── binance_today.py  # Binance daily source
-│   │   └── streaming/
-│   │       ├── jobs/
-│   │       │   └── crypto_stream_job.py  # stream producer job
-│   │       ├── producers/
-│   │       │   └── kafka_producer.py  # Kafka producer
-│   │       ├── sources/
-│   │       │   ├── binance_source.py  # WebSocket source
-│   │       │   └── websocket_client.py  # WS reconnect client
-│   │       ├── spark/
-│   │       │   └── spark_streaming.py  # Spark stream job
-│   │       └── utils/
-│   │           └── helpers.py  # Kafka parsing helper
+│   │   ├── batch/  # historical and daily fetchers
+│   │   └── streaming/  # Kafka producers and WS sources
 │   ├── jobs/
-│   │   ├── batch/
-│   │   │   ├── bronze.py  # bronze job
-│   │   │   ├── cleanup_raw.py  # raw cleanup job
-│   │   │   ├── gold.py  # gold job
-│   │   │   ├── ingest.py  # ingest job
-│   │   │   ├── silver.py  # silver job
-│   │   │   └── utils.py  # batch helpers
-│   │   └── streaming/
-│   │       ├── spark_predictions.py  # prediction stream job
-│   │       └── spark_streaming.py  # market stream job
-│   ├── schema/
-│   │   ├── bronze/
-│   │   │   └── market.py  # bronze schema
-│   │   ├── gold/
-│   │   │   └── market.py  # gold schema
-│   │   ├── raw/
-│   │   │   └── market.py  # raw schema
-│   │   ├── silver/
-│   │   │   └── market.py  # silver schema
-│   │   ├── state/
-│   │   │   └── market.py  # state schema
-│   │   └── validation.py  # schema checks
-│   ├── storage/
-│   │   ├── delta/
-│   │   │   ├── reader.py  # Delta reader
-│   │   │   ├── utils.py  # Delta helpers
-│   │   │   └── writer.py  # Delta writer
-│   │   └── local/
-│   │       └── csv.py  # CSV helper
-│   ├── transformers/
-│   │   ├── bronze/
-│   │   │   └── market.py  # bronze transform
-│   │   ├── gold/
-│   │   │   └── market.py  # gold transform
-│   │   ├── raw/
-│   │   │   └── market.py  # raw transform
-│   │   └── silver/
-│   │       └── market.py  # silver transform
-│   ├── utils/
-│   │   └── spark.py  # Spark builder
-│   └── validation/
-│       └── validation.py  # validation rules
+│   │   ├── batch/  # Medallion (Bronze/Silver/Gold) batch and prediction jobs
+│   │   └── streaming/  # Spark streaming jobs
+│   ├── schema/  # Medallion and state schemas
+│   ├── storage/  # Delta and local IO abstractions
+│   ├── transformers/  # Medallion transformation logic
+│   ├── utils/  # Spark and WS helpers
+│   └── validation/  # Data quality rules
 
 ├── scripts/  # convenience launchers
 │   ├── README.md  # script notes
@@ -232,19 +175,16 @@ The tree below is truncated to the directories and files that define the current
 
 ## Tech Stack
 
-- Python 3.10 for the application code, batch jobs, and Airflow workers.
-- Apache Airflow 2.9.1 for orchestration of the batch medallion flow and training flow.
-- Apache Spark 3.5.0 for local batch processing and Spark Structured Streaming.
-- Delta Lake via `delta-spark` and `deltalake` for Bronze, Silver, Gold, and state tables.
-- Apache Kafka 3.7.0 for live market event transport.
-- FastAPI, Pydantic, and Uvicorn for the prediction API.
-- Pandas and NumPy for model-side feature handling and inference preprocessing.
-- XGBoost, scikit-learn, joblib, and MLflow for training, evaluation, artifact loading, and logging.
-- Delta history + MLflow metrics for model monitoring and drift-driven retraining.
-- websockets and requests for Binance live and historical ingestion.
-- PyYAML for configuration loading from `configs/*.yaml`.
-- PostgreSQL 15 with `psycopg2-binary` for the Airflow metadata database.
-- Docker and Docker Compose for local service orchestration.
+- Python 3.10+ for application code and pipelines.
+- Apache Airflow 2.9.1 for orchestration.
+- Apache Spark 3.5.0 for Medallion processing and streaming.
+- Delta Lake (delta-spark, deltalake) for reliable storage.
+- Apache Kafka 3.7.0 for real-time event transport.
+- FastAPI & Pydantic for the prediction service.
+- Streamlit for monitoring and research dashboard.
+- MLflow for model tracking and registry.
+- XGBoost & Scikit-learn for ML modelling.
+- Docker & Docker Compose for local orchestration.
 
 ## Current Runtime State
 
