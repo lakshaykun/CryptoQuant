@@ -13,14 +13,12 @@ def main():
     symbols = config.get("symbols") or []
     interval = config.get("interval")
     base_path = config.get("raw_data_path", {}).get("market")
-    render_uri = config.get("render_uri", {}).get("market_today")
 
     fetch_market_today(
         symbols=symbols,
         interval=interval,
         logger=logger,
         base_path=base_path,
-        render_uri=render_uri,
     )
 
     logger.info("Today ingestion complete")

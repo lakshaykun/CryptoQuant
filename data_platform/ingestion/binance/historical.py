@@ -1,35 +1,15 @@
-# render_api/app/historical.py
+# data_platform/ingestion/binance/historical.py
 
 import requests
 from datetime import datetime, timezone
+from .parser import parse_historical_kline
 
 BASE_URL = "https://api.binance.com/api/v3/klines"
 
-COLUMNS = [
-    'open_time', 'open', 'high', 'low', 'close', 'volume',
-    'close_time', 'quote_volume', 'trades',
-    'taker_buy_base', 'taker_buy_quote', 'ignore'
-]
-
-
-def _row_to_dict(row):
-    return {
-        "open_time": row[0],
-        "open": float(row[1]),
-        "high": float(row[2]),
-        "low": float(row[3]),
-        "close": float(row[4]),
-        "volume": float(row[5]),
-        "close_time": row[6],
-        "quote_volume": float(row[7]),
-        "trades": int(row[8]),
-        "taker_buy_base": float(row[9]),
-        "taker_buy_quote": float(row[10]),
-        "ignore": 0,
-    }
-
-
 def iter_today_klines(symbol: str, interval: str):
+    """
+    Yields parsed Binance kline dictionaries for the current day up to now.
+    """
     now = datetime.now(timezone.utc)
     start = datetime(now.year, now.month, now.day, tzinfo=timezone.utc)
 
@@ -45,17 +25,21 @@ def iter_today_klines(symbol: str, interval: str):
         }
 
         response = requests.get(BASE_URL, params=params, timeout=10)
+        response.raise_for_status()
         data = response.json()
 
         if not data:
             break
 
         for row in data:
-            yield _row_to_dict(row)
+            yield parse_historical_kline(row, symbol)
 
-        # move forward
+        # Move forward using the close_time of the last candle
         start_ts = data[-1][6] + 1
 
 
 def fetch_today_klines(symbol: str, interval: str):
+    """
+    Returns a list of all parsed kline dictionaries for the current day.
+    """
     return list(iter_today_klines(symbol, interval))

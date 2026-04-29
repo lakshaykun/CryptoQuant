@@ -31,19 +31,15 @@ INITIAL_RETRY_DELAY_SECONDS = 10
 MAX_RETRY_DELAY_SECONDS = 600
 
 
-def _request_today(symbol: str, interval: str, render_uri: str, logger):
+from ingestion.binance.historical import fetch_today_klines
+
+def _fetch_today_data(symbol: str, interval: str, logger):
     retry_delay = INITIAL_RETRY_DELAY_SECONDS
     last_error = None
 
     for attempt in range(1, MAX_RETRY_ATTEMPTS + 1):
         try:
-            response = requests.get(
-                render_uri,
-                params={"symbol": symbol, "interval": interval},
-                timeout=REQUEST_TIMEOUT_SECONDS,
-            )
-            response.raise_for_status()
-            return response.json()
+            return fetch_today_klines(symbol, interval)
         except Exception as exc:
             last_error = exc
 
@@ -64,7 +60,7 @@ def _request_today(symbol: str, interval: str, render_uri: str, logger):
     raise RuntimeError(f"Failed to fetch data for {symbol} at {interval}.")
 
 
-def fetch_today(symbol: str, interval: str, base_path: str, render_uri: str, logger):
+def fetch_today(symbol: str, interval: str, base_path: str, logger):
     date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
     filename = build_filename(symbol, interval, date_str)
@@ -77,7 +73,7 @@ def fetch_today(symbol: str, interval: str, base_path: str, render_uri: str, log
         return
 
     try:
-        payload = _request_today(symbol, interval, render_uri, logger)
+        payload = _fetch_today_data(symbol, interval, logger)
         rows = payload.get("data", []) if isinstance(payload, dict) else payload
 
         if not rows:

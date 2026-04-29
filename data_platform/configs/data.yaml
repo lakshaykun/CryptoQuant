@@ -41,6 +41,6 @@ symbols: ["BTCUSDT", "ETHUSDT"]
 # , "BNBUSDT", "SOLUSDT", "XRPUSDT", "USDCUSDT"
 
 
-render_uri:
-    market_live: "wss://cryptoquantproducer.onrender.com/ws/binance/live"
-    market_today: "https://cryptoquantproducer.onrender.com/binance/backfill"
+binance:
+    base_url: "https://api.binance.com"
+    ws_url: "wss://stream.binance.com:9443/ws"

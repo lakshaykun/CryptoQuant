@@ -15,7 +15,6 @@ def fetch_market_today(
     interval: str,
     logger: Logger,
     base_path: str,
-    render_uri: str,
 ):
     if not symbols:
         logger.info("No symbols to fetch.")
@@ -23,16 +22,12 @@ def fetch_market_today(
     if not base_path:
         logger.info("No base path provided for saving data.")
         return DataFrame()
-    if not render_uri:
-        logger.info("No render URI provided for fetching today data.")
-        return DataFrame()
 
     for index, symbol in enumerate(symbols):
         fetch_today(
             symbol,
             interval,
             base_path,
-            render_uri,
             logger,
         )
 

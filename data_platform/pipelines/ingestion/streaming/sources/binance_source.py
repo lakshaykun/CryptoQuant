@@ -1,22 +1,16 @@
 # pipelines/ingestion/streaming/source/binance_source.py
 
-from pipelines.utils.websocket_client import WebSocketClient
+from ingestion.binance.ws_client import stream_binance
 
 class BinanceSource:
     def __init__(self, logger, data_config: dict):
-        # Load config and URI for Binance WebSocket
         self.config = data_config
-        self.uri = self.config["render_uri"]["market_live"]
         self.logger = logger
-        symbols = self.config.get("symbols", ["BTCUSDT", "ETHUSDT"])
-        interval = self.config.get("interval", "1m")
-        self.uri += f"?symbols={','.join(symbols).lower()}&interval={interval}"
-
-        self.client = WebSocketClient(self.uri, logger)
-
+        self.symbols = self.config.get("symbols", ["BTCUSDT", "ETHUSDT"])
+        self.interval = self.config.get("interval", "1m")
+        self.uri = self.config.get("binance", {}).get("ws_url", "wss://stream.binance.com:9443/ws")
 
     async def stream(self):
-        async for data in self.client.connect():
+        async for data in stream_binance(self.uri, self.symbols, self.interval, self.logger):
             self.logger.info(f"Received data: {data}")
-            if data.get("type") != "heartbeat":
-                yield data
+            yield data
