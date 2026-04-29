@@ -3,6 +3,7 @@
 from deltalake import DeltaTable
 from utils_global.logger import get_logger
 from utils_global.config_loader import load_config
+from models.features.build_features import sanitize_features
 
 logger = get_logger(__name__)
 data_config = load_config("configs/data.yaml")
@@ -14,6 +15,8 @@ def load_data():
     df = dt.to_pandas(
         columns=model_config["expected_columns"]
     )
+
+    df = sanitize_features(df)
     
     path = model_config["train_data_path"]
 

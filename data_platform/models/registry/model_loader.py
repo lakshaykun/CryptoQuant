@@ -13,7 +13,7 @@ mlflow_tracking_uri = os.getenv(
 mlflow.set_tracking_uri(mlflow_tracking_uri)
 mlflow.set_registry_uri(mlflow_tracking_uri)
 
-@lru_cache(maxsize=1)
+@lru_cache(maxsize=32)
 def load_model(logger, model_name=None):
     """
     Load the latest registered MLflow model version.
@@ -61,6 +61,7 @@ def load_model(logger, model_name=None):
                 )
                 return mlflow.pyfunc.load_model(model_uri)
             except Exception as exc:
+                load_errors.append(f"version {version.version} from {version.source}: {exc}")
                 logger.error(
                     f"version {version.version} from {version.source}: {exc}"
                 )
@@ -75,3 +76,10 @@ def load_model(logger, model_name=None):
         raise RuntimeError(
             f"Failed to load MLflow model '{registered_model_name}' from '{mlflow_tracking_uri}': {exc}"
         ) from exc
+
+
+def load_models(logger, model_names_by_task):
+    loaded = {}
+    for task, model_name in model_names_by_task.items():
+        loaded[task] = load_model(logger, model_name=model_name)
+    return loaded

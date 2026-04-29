@@ -26,8 +26,11 @@ def _predict_batches(pdf_iter):
             continue
 
         batch = pdf.copy()
-        batch["prediction"] = predict_with_api(batch)
-        batch = batch.drop(columns=["ingestion_time"], errors="ignore")
+        outputs = predict_with_api(batch)
+        for key in ["return_short", "return_long", "sign_short", "sign_long"]:
+            values = outputs.get(key)
+            if isinstance(values, list):
+                batch[key] = values
         yield batch[PREDICTIONS_BATCH_COLUMNS]
 
 
@@ -36,7 +39,10 @@ def _cast_prediction_columns(df):
         "cast(open_time as timestamp) as open_time",
         "cast(symbol as string) as symbol",
         "cast(date as date) as date",
-        "cast(prediction as double) as prediction",
+        "cast(return_short as double) as return_short",
+        "cast(return_long as double) as return_long",
+        "cast(sign_short as int) as sign_short",
+        "cast(sign_long as int) as sign_long",
     )
 
 

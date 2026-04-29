@@ -79,3 +79,6 @@ class CryptoFeatures(BaseModel):
 
 class PredictRequest(BaseModel):
     data: List[CryptoFeatures]
+
+class PredictResponse(BaseModel):
+    prediction: List[float]

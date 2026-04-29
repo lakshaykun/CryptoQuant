@@ -54,7 +54,7 @@ with DAG(
     train_model_task = PythonOperator(
         task_id="model_training",
         python_callable=train_model_task_wrapper,
-        execution_timeout=timedelta(minutes=20),
+        execution_timeout=timedelta(minutes=60),
     )
 
     enable_pipeline_var_task = PythonOperator(

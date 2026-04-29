@@ -190,44 +190,45 @@ def _prepare_prediction_frame(predictions_df: pd.DataFrame) -> pd.DataFrame:
     return prepared.dropna(subset=["prediction", "actual_log_return_lead1"])
 
 
-def _compute_model_drift(predictions_df: pd.DataFrame, cfg: Dict) -> Dict:
-    prepared = _prepare_prediction_frame(predictions_df)
+def _compute_model_drift(
+    predictions_df: pd.DataFrame,
+    baseline_df: pd.DataFrame,
+    target_columns: List[str],
+    cfg: Dict,
+) -> Dict:
+    if predictions_df.empty:
+        return {"drift_score": 0.0, "drift_detected": False, "per_target": {}}
 
-    if prepared.empty or prepared.shape[0] < (cfg["min_rows"] * 2):
-        return {
-            "drift_score": 0.0,
-            "drift_detected": False,
-            "baseline_rmse": 0.0,
-            "recent_rmse": 0.0,
-            "rmse_ratio": 1.0,
-            "ks_error": 0.0,
+    recent = predictions_df.tail(cfg["recent_window"]).copy()
+    per_target = {}
+    scores = []
+    detected = False
+
+    for target in target_columns:
+        if target not in recent.columns or target not in baseline_df.columns:
+            continue
+        baseline_series = _safe_numeric(baseline_df[target].tail(cfg["baseline_window"]))
+        recent_series = _safe_numeric(recent[target])
+        if baseline_series.size < cfg["min_rows"] or recent_series.size < cfg["min_rows"]:
+            continue
+        ks_value = _ks_statistic(baseline_series, recent_series)
+        mean_std_score, mean_shift, std_shift = _mean_std_shift(baseline_series, recent_series)
+        drift_score = max(float(ks_value), float(mean_std_score))
+        is_detected = drift_score >= cfg["model_drift_threshold"]
+        per_target[target] = {
+            "drift_score": drift_score,
+            "drift_detected": bool(is_detected),
+            "ks_error": float(ks_value),
+            "mean_shift": float(mean_shift),
+            "std_shift": float(std_shift),
         }
-
-    baseline_window = min(cfg["baseline_window"], prepared.shape[0] // 2)
-    recent_window = min(cfg["recent_window"], prepared.shape[0] // 2)
-
-    baseline = prepared.iloc[:baseline_window]
-    recent = prepared.iloc[-recent_window:]
-
-    baseline_error = baseline["prediction"] - baseline["actual_log_return_lead1"]
-    recent_error = recent["prediction"] - recent["actual_log_return_lead1"]
-
-    baseline_rmse = float(np.sqrt(np.mean(np.square(baseline_error))))
-    recent_rmse = float(np.sqrt(np.mean(np.square(recent_error))))
-    rmse_delta = abs(recent_rmse - baseline_rmse) / (abs(baseline_rmse) + 1e-6)
-    rmse_ratio = recent_rmse / (abs(baseline_rmse) + 1e-6)
-    ks_error = _ks_statistic(baseline_error, recent_error)
-
-    drift_score = max(float(rmse_delta), float(ks_error))
-    drift_detected = bool(drift_score >= cfg["model_drift_threshold"])
+        scores.append(drift_score)
+        detected = detected or is_detected
 
     return {
-        "drift_score": float(drift_score),
-        "drift_detected": drift_detected,
-        "baseline_rmse": baseline_rmse,
-        "recent_rmse": recent_rmse,
-        "rmse_ratio": float(rmse_ratio),
-        "ks_error": float(ks_error),
+        "drift_score": float(max(scores)) if scores else 0.0,
+        "drift_detected": bool(detected),
+        "per_target": per_target,
     }
 
 
@@ -262,7 +263,8 @@ def evaluate_drift() -> Dict:
     baseline_df = baseline_df.tail(drift_cfg["baseline_window"])
     data_rows, data_summary = _compute_data_drift_rows(baseline_df, recent_df, features, drift_cfg)
 
-    predictions_columns = ["open_time", "symbol", "prediction", "log_return"]
+    target_columns = list((model_cfg.get("models") or {}).keys()) or ["prediction"]
+    predictions_columns = list(dict.fromkeys(["open_time", "symbol", *target_columns, "prediction"]))
     try:
         predictions_df = _load_predictions_frame(columns=predictions_columns)
         predictions_df["open_time"] = pd.to_datetime(predictions_df["open_time"], errors="coerce")
@@ -271,20 +273,36 @@ def evaluate_drift() -> Dict:
         logger.warning("Failed to load predictions dataset for drift monitoring: %s", exc)
         predictions_df = pd.DataFrame(columns=predictions_columns)
 
-    model_drift = _compute_model_drift(predictions_df, drift_cfg)
+    model_drift = _compute_model_drift(predictions_df, baseline_df, target_columns, drift_cfg)
 
     overall_score = max(data_summary["drift_score"], model_drift["drift_score"])
     drift_detected = bool(data_summary["drift_detected"] or model_drift["drift_detected"])
     timestamp = datetime.now(timezone.utc)
+
+    model_rows = []
+    for target_name, target_metrics in model_drift.get("per_target", {}).items():
+        model_rows.append(
+            {
+                "feature_name": f"__model__.{target_name}",
+                "drift_type": "model",
+                "drift_score": float(target_metrics["drift_score"]),
+                "drift_detected": bool(target_metrics["drift_detected"]),
+                "model_metric": float(target_metrics["drift_score"]),
+                "threshold": float(drift_cfg["model_drift_threshold"]),
+                "ks_statistic": float(target_metrics["ks_error"]),
+                "mean_shift": float(target_metrics["mean_shift"]),
+                "std_shift": float(target_metrics["std_shift"]),
+            }
+        )
 
     model_row = {
         "feature_name": "__model__",
         "drift_type": "model",
         "drift_score": float(model_drift["drift_score"]),
         "drift_detected": bool(model_drift["drift_detected"]),
-        "model_metric": float(model_drift["rmse_ratio"]),
+        "model_metric": float(model_drift["drift_score"]),
         "threshold": float(drift_cfg["model_drift_threshold"]),
-        "ks_statistic": float(model_drift["ks_error"]),
+        "ks_statistic": 0.0,
         "mean_shift": None,
         "std_shift": None,
     }
@@ -294,16 +312,16 @@ def evaluate_drift() -> Dict:
         "drift_type": "overall",
         "drift_score": float(overall_score),
         "drift_detected": drift_detected,
-        "model_metric": float(model_drift["rmse_ratio"]),
+        "model_metric": float(model_drift["drift_score"]),
         "threshold": float(max(drift_cfg["data_drift_threshold"], drift_cfg["model_drift_threshold"])),
-        "ks_statistic": float(max(model_drift["ks_error"], 0.0)),
+        "ks_statistic": 0.0,
         "mean_shift": None,
         "std_shift": None,
         "data_drift_score": float(data_summary["drift_score"]),
         "model_drift_score": float(model_drift["drift_score"]),
     }
 
-    rows = data_rows + [model_row, overall_row]
+    rows = data_rows + model_rows + [model_row, overall_row]
 
     logger.info(
         "[drift_monitor] timestamp=%s overall=%.4f data=%.4f model=%.4f detected=%s features=%s",

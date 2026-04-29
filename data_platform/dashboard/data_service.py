@@ -34,9 +34,15 @@ def prepare_predictions_frame(
     target_frame = target_frame[["symbol", "open_time", "actual_close", "close", "actual_log_return_lead1"]]
 
     subset = subset.merge(target_frame, on=["symbol", "open_time"], how="left")
+    if "return_short" in subset.columns:
+        subset["prediction"] = pd.to_numeric(subset["return_short"], errors="coerce")
     subset["predicted_close"] = subset["close"] * np.exp(subset["prediction"])
     subset["close_residual"] = subset["predicted_close"] - subset["actual_close"]
     subset["residual"] = subset["prediction"] - subset["actual_log_return_lead1"]
+    if "sign_short" in subset.columns:
+        subset["f1_sign_short"] = (subset["sign_short"] == np.sign(subset["actual_log_return_lead1"]).astype(int)).astype(float)
+    if "return_short" in subset.columns:
+        subset["rmse_return_short"] = np.sqrt(np.square(subset["residual"]))
 
     return subset.dropna(subset=["prediction", "actual_log_return_lead1", "predicted_close", "actual_close"]).copy()
 
@@ -67,7 +73,18 @@ def load_data(
     )
 
     predictions_path = data_config.get("tables", {}).get("predictions_log_return_lead1", {}).get("path", "")
-    prediction_columns = ["open_time", "symbol", "close", "prediction", "log_return", "model_version"]
+    prediction_columns = [
+        "open_time",
+        "symbol",
+        "close",
+        "prediction",
+        "return_short",
+        "return_long",
+        "sign_short",
+        "sign_long",
+        "log_return",
+        "model_version",
+    ]
     predictions_frame = load_delta_table(
         table_path=predictions_path,
         columns=prediction_columns,

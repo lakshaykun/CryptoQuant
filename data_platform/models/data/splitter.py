@@ -3,6 +3,7 @@
 from pandas import DataFrame
 import pandas as pd
 
+
 def time_split(
     df: DataFrame,
     train_days: int = 90,
@@ -32,3 +33,38 @@ def time_split(
     test = df[df["open_time"] >= test_start]
 
     return train, val, test
+
+
+def resolve_model_split_config(model_cfg: dict, global_cfg: dict) -> dict:
+    model_split = (model_cfg or {}).get("time_split_days") or {}
+    global_split = (global_cfg or {}).get("time_split_days") or {}
+    resolved = {
+        "train": int(model_split.get("train", global_split.get("train", 90))),
+        "val": int(model_split.get("val", global_split.get("val", 14))),
+        "test": int(model_split.get("test", global_split.get("test", 7))),
+    }
+    return resolved
+
+
+def split_for_model(df: DataFrame, split_cfg: dict) -> tuple[DataFrame, DataFrame, DataFrame, dict]:
+    ordered = df.sort_values(["symbol", "open_time"]).reset_index(drop=True)
+    max_time = ordered["open_time"].max()
+
+    test_start = max_time - pd.Timedelta(days=split_cfg["test"])
+    val_start = test_start - pd.Timedelta(days=split_cfg["val"])
+    train_start = val_start - pd.Timedelta(days=split_cfg["train"])
+
+    train = ordered[(ordered["open_time"] >= train_start) & (ordered["open_time"] < val_start)]
+    val = ordered[(ordered["open_time"] >= val_start) & (ordered["open_time"] < test_start)]
+    test = ordered[ordered["open_time"] >= test_start]
+
+    metadata = {
+        "train_start": train_start,
+        "val_start": val_start,
+        "test_start": test_start,
+        "max_time": max_time,
+        "train_rows": len(train),
+        "val_rows": len(val),
+        "test_rows": len(test),
+    }
+    return train, val, test, metadata

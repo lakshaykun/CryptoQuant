@@ -40,8 +40,8 @@ with DAG(
         bash_command=build_spark_submit(
             "pipelines/jobs/batch/ingest_today.py"
         ),
-        retries=4,
-        retry_delay=timedelta(minutes=2),
+        retries=20,
+        retry_delay=timedelta(seconds=20),
     )
 
     bronze = BashOperator(

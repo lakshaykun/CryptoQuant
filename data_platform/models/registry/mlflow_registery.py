@@ -53,12 +53,13 @@ def log_dataframe(df: pd.DataFrame, artifact_name: str, artifact_path=None):
 def log_scaler(scaler):
     mlflow.sklearn.log_model(scaler, f"scaler")
 
-def register_model(run_id, model_name):
+def register_model(run_id, model_name, registered_model_name=None):
     if not run_id or not model_name:
         raise ValueError("Cannot register model without a successful run and model name")
 
     model_uri = f"runs:/{run_id}/model_{model_name}"
+    final_name = registered_model_name or mlflow_config["model_name"]
     return mlflow.register_model(
         model_uri,
-        mlflow_config["model_name"]
+        final_name
     )

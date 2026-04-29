@@ -2,14 +2,17 @@ import numpy as np
 import pandas as pd
 
 
-def backtest(y_test, preds, threshold=0.0, transaction_cost=0.0):
+def backtest(y_test, preds, threshold=0.0, transaction_cost=0.0, direct_signal=False):
     df = pd.DataFrame({"actual_return": y_test, "prediction": preds})
 
-    df["signal"] = np.select(
-        [df["prediction"] > threshold, df["prediction"] < -threshold],
-        [1, -1],
-        default=0,
-    )
+    if direct_signal:
+        df["signal"] = np.clip(np.rint(df["prediction"]).astype(int), -1, 1)
+    else:
+        df["signal"] = np.select(
+            [df["prediction"] > threshold, df["prediction"] < -threshold],
+            [1, -1],
+            default=0,
+        )
 
     df["turnover"] = df["signal"].diff().abs().fillna(0)
     df["strategy_return"] = df["signal"] * df["actual_return"]

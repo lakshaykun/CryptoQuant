@@ -46,7 +46,7 @@ http://localhost:8080 - airflow / airflow
 
 
 ### clear data in delta
-sudo rm -rf delta/bronze/market delta/silver/market delta/raw_data/market delta/state/market_batch delta/state/market_stream delta/state/monitoring delta/state/predictions delta/gold/market delta/predictions
+sudo rm -rf delta/bronze/market delta/silver/market delta/raw_data/market delta/state/market_batch delta/state/market_stream delta/state/monitoring delta/state/predictions delta/gold/market delta/predictions/log_return_lead1
 
 sudo rm -rf delta/state/predictions delta/predictions
 

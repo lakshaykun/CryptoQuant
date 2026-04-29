@@ -11,7 +11,7 @@ from utils_global.config_loader import load_config
 from utils_global.logger import get_logger
 
 from models.inference.realtime import RealtimePredictor
-from api.schemas.request import PredictRequest
+from api.schemas.request import PredictRequest, PredictResponse
 
 app = FastAPI(
     title="CryptoQuant",
@@ -167,7 +167,7 @@ def get_drift_summary():
     }
 
 @app.post("/predict")
-def predict(data: PredictRequest):
+def predict(data: PredictRequest) -> PredictResponse:
     if len(data.data) == 0:
         raise HTTPException(
             status_code=400,
@@ -191,6 +191,8 @@ def predict(data: PredictRequest):
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    predictions = np.asarray(prediction, dtype=float).reshape(-1)
+    if isinstance(prediction, dict) and "predictions" in prediction:
+        return prediction
 
+    predictions = np.asarray(prediction, dtype=float).reshape(-1)
     return {"prediction": predictions.tolist()}

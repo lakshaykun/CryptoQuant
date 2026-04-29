@@ -35,8 +35,11 @@ def predict_with_api(df, api_url=None, timeout_seconds=None):
     except json.JSONDecodeError as exc:
         raise RuntimeError("Prediction API returned invalid JSON") from exc
 
+    if isinstance(response_payload.get("predictions"), dict):
+        return response_payload["predictions"]
+
     predictions = response_payload.get("prediction")
     if not isinstance(predictions, list):
-        raise RuntimeError("Prediction API response did not include a prediction list")
+        raise RuntimeError("Prediction API response did not include prediction fields")
 
-    return predictions
+    return {"prediction": predictions}

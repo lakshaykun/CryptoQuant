@@ -31,7 +31,7 @@ def feature_engineering_task_wrapper():
 with DAG(
     dag_id="model_training_pipeline",
     start_date=datetime(2024, 1, 1),
-    schedule=timedelta(minutes=20),
+    schedule=timedelta(minutes=60),
     catchup=False,
     max_active_runs=1,
     is_paused_upon_creation=False
@@ -60,7 +60,7 @@ with DAG(
     train_model_task = PythonOperator(
         task_id="model_training",
         python_callable=train_model_task_wrapper,
-        execution_timeout=timedelta(minutes=20),
+        execution_timeout=timedelta(minutes=60),
     )
 
     check_enabled_task >> load_data_task >> validate_schema_task >> feature_engineering_task >> train_model_task
