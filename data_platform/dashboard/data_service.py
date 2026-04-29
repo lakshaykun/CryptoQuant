@@ -59,7 +59,7 @@ def load_data(
     repo_root: str,
 ) -> Dict[str, pd.DataFrame]:
     gold_path = data_config.get("tables", {}).get("gold_market", {}).get("path", "")
-    feature_columns = [feature for feature in model_config.get("features", []) if feature != "symbol"]
+    feature_columns = [feature for feature in model_config.get("features_long", model_config.get("features_short", model_config.get("features", []))) if feature != "symbol"]
     gold_columns = list(
         dict.fromkeys(["open_time", "ingestion_time", "symbol", "close", "log_return", "date", *feature_columns])
     )

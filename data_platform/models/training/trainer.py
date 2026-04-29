@@ -49,8 +49,8 @@ class Trainer:
 
     def train(self, df):
         self._validate_schema(df)
-        features = self.config["features"]
-        self._persist_feature_columns(features)
+        all_features = self.config.get("features_long", self.config.get("features_short", self.config.get("features", [])))
+        self._persist_feature_columns(all_features)
 
         tasks = self.config.get("models", {})
         if not tasks:
@@ -62,11 +62,14 @@ class Trainer:
             train_df, val_df, test_df, split_meta = split_for_model(df, split_cfg)
             self._log_split_stats(model_name, split_cfg, split_meta)
 
+            task_features_key = "features_long" if model_cfg.get("horizon") == "1d" else "features_short"
+            task_features = self.config.get(task_features_key, self.config.get("features_short", self.config.get("features", [])))
+
             task_type = model_cfg.get("type", "regression")
             if task_type == "regression":
-                self._train_regression_model(model_name, model_cfg, train_df, val_df, test_df, features)
+                self._train_regression_model(model_name, model_cfg, train_df, val_df, test_df, task_features)
             elif task_type == "classification":
-                self._train_classification_model(model_name, model_cfg, train_df, val_df, test_df, features)
+                self._train_classification_model(model_name, model_cfg, train_df, val_df, test_df, task_features)
             else:
                 raise ValueError(f"Unsupported task type '{task_type}' for task '{model_name}'")
 
@@ -223,7 +226,7 @@ class Trainer:
         if missing:
             raise ValueError(f"Missing columns: {missing}")
 
-        features = set(self.config["features"])
+        features = set(self.config.get("features_long", self.config.get("features_short", self.config.get("features", []))))
         missing_feat = features - set(df.columns)
         if missing_feat:
             raise ValueError(f"Missing features: {missing_feat}")

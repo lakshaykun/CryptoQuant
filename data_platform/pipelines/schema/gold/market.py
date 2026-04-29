@@ -23,8 +23,11 @@ GOLD_MARKET_SCHEMA = StructType([
     StructField("vwap_proxy", DoubleType()),   # (high+low+close)/3
 
     # returns (clean)
+    StructField("return_current", DoubleType()),
     StructField("log_return_lag1", DoubleType()),
     StructField("return_5", DoubleType()),
+    StructField("return_1d", DoubleType()),
+    StructField("return_3d", DoubleType()),
     StructField("return_zscore", DoubleType()),
     StructField("return_acceleration", DoubleType()),
     StructField("smoothed_return_3", DoubleType()),
@@ -33,6 +36,8 @@ GOLD_MARKET_SCHEMA = StructType([
     StructField("volatility", DoubleType()),
     StructField("volatility_5", DoubleType()),
     StructField("volatility_std_10", DoubleType()),
+    StructField("volatility_1d", DoubleType()),
+    StructField("volatility_3d", DoubleType()),
     StructField("volatility_ratio", DoubleType()),
     StructField("volatility_regime", DoubleType()),
 

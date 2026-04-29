@@ -22,14 +22,16 @@ def time_split(
     # DEFINE WINDOWS
     # =========================
     test_start = max_time - pd.Timedelta(days=test_days)
-    val_start = test_start - pd.Timedelta(days=val_days)
-    train_start = val_start - pd.Timedelta(days=train_days)
+    val_end = test_start - pd.Timedelta(days=1)
+    val_start = val_end - pd.Timedelta(days=val_days)
+    train_end = val_start - pd.Timedelta(days=1)
+    train_start = train_end - pd.Timedelta(days=train_days)
 
     # =========================
     # SPLIT
     # =========================
-    train = df[(df["open_time"] >= train_start) & (df["open_time"] < val_start)]
-    val = df[(df["open_time"] >= val_start) & (df["open_time"] < test_start)]
+    train = df[(df["open_time"] >= train_start) & (df["open_time"] < train_end)]
+    val = df[(df["open_time"] >= val_start) & (df["open_time"] < val_end)]
     test = df[df["open_time"] >= test_start]
 
     return train, val, test
@@ -51,11 +53,13 @@ def split_for_model(df: DataFrame, split_cfg: dict) -> tuple[DataFrame, DataFram
     max_time = ordered["open_time"].max()
 
     test_start = max_time - pd.Timedelta(days=split_cfg["test"])
-    val_start = test_start - pd.Timedelta(days=split_cfg["val"])
-    train_start = val_start - pd.Timedelta(days=split_cfg["train"])
+    val_end = test_start - pd.Timedelta(days=1)
+    val_start = val_end - pd.Timedelta(days=split_cfg["val"])
+    train_end = val_start - pd.Timedelta(days=1)
+    train_start = train_end - pd.Timedelta(days=split_cfg["train"])
 
-    train = ordered[(ordered["open_time"] >= train_start) & (ordered["open_time"] < val_start)]
-    val = ordered[(ordered["open_time"] >= val_start) & (ordered["open_time"] < test_start)]
+    train = ordered[(ordered["open_time"] >= train_start) & (ordered["open_time"] < train_end)]
+    val = ordered[(ordered["open_time"] >= val_start) & (ordered["open_time"] < val_end)]
     test = ordered[ordered["open_time"] >= test_start]
 
     metadata = {

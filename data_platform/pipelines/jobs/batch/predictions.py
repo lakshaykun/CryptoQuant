@@ -84,7 +84,7 @@ def main(df=None):
         df = df.filter(F.col("is_valid_feature_row") == True)
 
         # drop nulls in feature columns
-        df = df.dropna(subset=modelConfig.get("features", []))
+        df = df.dropna(subset=modelConfig.get("features_long", modelConfig.get("features_short", modelConfig.get("features", []))))
 
         if df.rdd.isEmpty():
             logger.info("No valid feature rows to predict, skipping write")

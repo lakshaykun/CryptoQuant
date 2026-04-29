@@ -27,7 +27,7 @@ def feature_engineering():
     df = pd.read_parquet(data_path)
 
     # remove rows with missing values and with is_valid_feature = False
-    df = df.dropna(subset=model_config.get("features", []))
+    df = df.dropna(subset=model_config.get("features_long", model_config.get("features_short", model_config.get("features", []))))
     df = df[df["is_valid_feature_row"] == True].copy()
 
     df = df.sort_values(["symbol", "open_time"])

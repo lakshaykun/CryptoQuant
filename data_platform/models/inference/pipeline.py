@@ -19,11 +19,10 @@ class InferencePipeline:
         artifact_path = Path("models/artifacts/feature_columns.pkl")
         if artifact_path.exists():
             return joblib.load(artifact_path)
-        return self.model_config.get("features", [])
+        return self.model_config.get("features_long", self.model_config.get("features_short", []))
 
-    def _prepare_features(self, df):
-        configured = self.model_config.get("features", [])
-        base = [col for col in configured if col in df.columns]
+    def _prepare_features(self, df, task_features):
+        base = [col for col in task_features if col in df.columns]
         X = df[base].copy()
 
         if "symbol" in X.columns and not pd.api.types.is_numeric_dtype(X["symbol"]):
@@ -31,17 +30,22 @@ class InferencePipeline:
             symbol_map = {symbol: index for index, symbol in enumerate(symbols)}
             X["symbol"] = X["symbol"].map(symbol_map).fillna(-1).astype(int)
 
-        return X.reindex(columns=self.feature_columns, fill_value=0)
+        return X.reindex(columns=task_features, fill_value=0)
 
     def run(self, df):
-        X = self._prepare_features(df)
-        if X.empty:
-            raise ValueError("No engineered feature rows provided")
         outputs = {}
         confidence_threshold = float(
             self.model_config.get("inference", {}).get("confidence_threshold", 0.0)
         )
         for task_name, model in self.models.items():
+            task_cfg = self.model_config.get("models", {}).get(task_name, {})
+            task_features_key = "features_long" if task_cfg.get("horizon") == "1d" else "features_short"
+            task_features = self.model_config.get(task_features_key, self.model_config.get("features_short", self.model_config.get("features", [])))
+
+            X = self._prepare_features(df, task_features)
+            if X.empty:
+                raise ValueError("No engineered feature rows provided")
+
             raw = np.asarray(model.predict(X)).reshape(-1)
             if task_name.startswith("sign_"):
                 pred = np.rint(raw).astype(int)

@@ -22,8 +22,11 @@ class CryptoFeatures(BaseModel):
     vwap_proxy: float
 
     # returns
+    return_current: float
     log_return_lag1: float
     return_5: float
+    return_1d: float
+    return_3d: float
     return_zscore: float
     return_acceleration: float
     smoothed_return_3: float
@@ -32,6 +35,8 @@ class CryptoFeatures(BaseModel):
     volatility: float
     volatility_5: float
     volatility_std_10: float
+    volatility_1d: float
+    volatility_3d: float
     volatility_ratio: float
     volatility_regime: float
 

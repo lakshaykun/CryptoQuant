@@ -237,7 +237,7 @@ def evaluate_drift() -> Dict:
     model_cfg = resolved_cfg["model"]
     drift_cfg = resolved_cfg["drift"]
 
-    raw_features = model_cfg.get("features", [])
+    raw_features = model_cfg.get("features_long", model_cfg.get("features_short", model_cfg.get("features", [])))
     features = _filter_drift_features(raw_features)
 
     training_path = model_cfg.get("train_data_path")

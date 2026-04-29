@@ -26,19 +26,22 @@ class GoldMarketTransformer:
             if not df.head(1):
                 return df.limit(0)
 
-        base_window = Window.partitionBy("symbol").orderBy("open_time")
-        window_5 = base_window.rowsBetween(-5, -1)
-        window_20 = base_window.rowsBetween(-20, -1)
+        df = df.withColumn("open_time_sec", F.col("open_time").cast("long"))
+        base_window = Window.partitionBy("symbol").orderBy("open_time_sec")
+        window_5 = base_window.rangeBetween(-1200, 0)
+        window_20 = base_window.rangeBetween(-5700, 0)
+        window_1d = base_window.rangeBetween(-86400, 0)
+        window_3d = base_window.rangeBetween(-259200, 0)
 
         # =========================
         # BASE FEATURES
         # =========================
 
-        df = df.withColumn("hl_range", F.col("high") - F.col("low"))
+        df = df.withColumn("hl_range", (F.col("high") - F.col("low")) / F.col("close"))
 
         df = df.withColumn(
             "vwap_proxy",
-            (F.col("high") + F.col("low") + F.col("close")) / 3
+            (F.col("close") / ((F.col("high") + F.col("low") + F.col("close")) / 3)) - 1
         )
 
         prev_close = F.lag("close", 1).over(base_window)
@@ -83,8 +86,11 @@ class GoldMarketTransformer:
 
         df = df.withColumn(
             "smoothed_return_3",
-            F.avg("log_return_raw").over(base_window.rowsBetween(-3, -1))
+            F.avg("log_return_raw").over(base_window.rangeBetween(-600, 0))
         )
+
+        df = df.withColumn("return_1d", F.sum("log_return_raw").over(window_1d))
+        df = df.withColumn("return_3d", F.sum("log_return_raw").over(window_3d))
 
         # =========================
         # VOLATILITY
@@ -105,8 +111,11 @@ class GoldMarketTransformer:
 
         df = df.withColumn(
             "volatility_std_10",
-            F.stddev("log_return_raw").over(base_window.rowsBetween(-10, -1))
+            F.stddev("log_return_raw").over(base_window.rangeBetween(-2700, 0))
         )
+
+        df = df.withColumn("volatility_1d", F.stddev("log_return_raw").over(window_1d))
+        df = df.withColumn("volatility_3d", F.stddev("log_return_raw").over(window_3d))
 
         df = df.withColumn(
             "volatility_ratio",
@@ -256,7 +265,7 @@ class GoldMarketTransformer:
             "close_position",
             GoldMarketTransformer._safe_divide(
                 F.col("close") - F.col("low"),
-                F.col("hl_range")
+                F.col("high") - F.col("low")
             )
         )
 
@@ -297,11 +306,13 @@ class GoldMarketTransformer:
         df = df.replace([float("inf"), float("-inf")], 0)
         df = df.fillna(0)
 
+        df = df.withColumnRenamed("log_return_raw", "return_current")
+
         df = df.drop(
-            "log_return_raw",
             "ma_5_tmp",
             "ma_20_tmp",
-            "volume_avg_20"
+            "volume_avg_20",
+            "open_time_sec"
         )
 
         return df

@@ -172,7 +172,7 @@ def render_platform_snapshot(
     retraining_cfg = monitoring_cfg.get("retraining", {}) or {}
     scheduler_cfg = monitoring_cfg.get("scheduler", {}) or {}
 
-    feature_count = len([feature for feature in model_config.get("features", []) if feature != "symbol"])
+    feature_count = len([feature for feature in model_config.get("features_long", model_config.get("features_short", model_config.get("features", []))) if feature != "symbol"])
     max_threshold = max(
         float(drift_cfg.get("data_drift_threshold", 0.2)),
         float(drift_cfg.get("model_drift_threshold", drift_cfg.get("prediction_drift_threshold", 0.25))),

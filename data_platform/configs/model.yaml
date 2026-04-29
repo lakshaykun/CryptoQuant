@@ -18,6 +18,69 @@ expected_columns : [
     'vwap_proxy',
 
     # returns
+    'return_current',
+    'log_return_lag1',
+    'return_5',
+    'return_1d',
+    'return_3d',
+    'return_zscore',
+    'return_acceleration',
+    'smoothed_return_3',
+
+    # volatility
+    'volatility',
+    'volatility_5',
+    'volatility_std_10',
+    'volatility_1d',
+    'volatility_3d',
+    'volatility_ratio',
+    'volatility_regime',
+
+    # microstructure
+    'imbalance_ratio',
+    'imbalance_change',
+    'imbalance_momentum',
+    'buy_ratio',
+    'buy_pressure_change',
+
+    # price positioning
+    'price_to_ma_5',
+    'price_to_ma_20',
+    'ma_cross_5_20',
+
+    # momentum
+    'momentum_ratio',
+
+    # volume & activity
+    'volume_spike',
+    'volume_ratio',
+    'volume_trend',
+    'trades_ratio',
+
+    # candle structure
+    'body_size',
+    'close_position',
+    'range_ratio',
+
+    # time
+    'hour_sin',
+    'hour_cos',
+
+    # metadata
+    'is_valid_feature_row',
+    'date',
+    'ingestion_time'
+]
+
+features_short: [
+    'symbol',
+
+    # derived base
+    'hl_range',
+    'vwap_proxy',
+
+    # returns
+    'return_current',
     'log_return_lag1',
     'return_5',
     'return_zscore',
@@ -60,14 +123,9 @@ expected_columns : [
     # time
     'hour_sin',
     'hour_cos',
-
-    # metadata
-    'is_valid_feature_row',
-    'date',
-    'ingestion_time'
 ]
 
-features : [
+features_long: [
     'symbol',
 
     # derived base
@@ -75,8 +133,11 @@ features : [
     'vwap_proxy',
 
     # returns
+    'return_current',
     'log_return_lag1',
     'return_5',
+    'return_1d',
+    'return_3d',
     'return_zscore',
     'return_acceleration',
     'smoothed_return_3',
@@ -85,6 +146,8 @@ features : [
     'volatility',
     'volatility_5',
     'volatility_std_10',
+    'volatility_1d',
+    'volatility_3d',
     'volatility_ratio',
     'volatility_regime',
 
@@ -127,7 +190,7 @@ targets:
   # 1 = neutral / flat move
   # 2 = positive / up move
   sign:
-    threshold: 0.002
+    threshold: 0.0015
     drop_neutral: false
 
 models:
@@ -183,7 +246,7 @@ training:
 optimization_metric: rmse
 
 inference:
-  confidence_threshold: 0.0002
+  confidence_threshold: 0.0015
 
 train_data_path: "models/artifacts/train_data.parquet"
 
@@ -193,22 +256,19 @@ model_params:
       objective: reg:squarederror
       eval_metric: rmse
       n_estimators: 1200
-      colsample_bytree: 0.8
       reg_alpha: 0.1
-      reg_lambda: 1.5
       min_child_weight: 2
       gamma: 0.05
       tree_method: hist
       max_bin: 256
       grow_policy: lossguide
-      max_leaves: 64
+      max_leaves: 15
       random_state: 42
 
     catboost:
       loss_function: RMSE
       eval_metric: RMSE
       iterations: 1500
-      l2_leaf_reg: 3
       bootstrap_type: Bernoulli
       subsample: 0.8
       rsm: 0.8
@@ -222,11 +282,9 @@ model_params:
       objective: regression
       metric: rmse
       n_estimators: 1200
-      max_depth: -1
       min_data_in_leaf: 30
       subsample: 0.8
       reg_alpha: 0.1
-      reg_lambda: 1.5
       max_bin: 255
       feature_fraction: 0.8
       bagging_freq: 1
@@ -238,22 +296,19 @@ model_params:
       eval_metric: mlogloss
       num_class: 3
       n_estimators: 1200
-      colsample_bytree: 0.8
       reg_alpha: 0.1
-      reg_lambda: 1.5
       min_child_weight: 2
       gamma: 0.05
       tree_method: hist
       max_bin: 256
       grow_policy: lossguide
-      max_leaves: 64
+      max_leaves: 15
       random_state: 42
 
     catboost:
       loss_function: MultiClass
       eval_metric: MultiClass
       iterations: 1500
-      l2_leaf_reg: 3
       bootstrap_type: Bernoulli
       subsample: 0.8
       rsm: 0.8
@@ -268,11 +323,9 @@ model_params:
       metric: multi_logloss
       num_class: 3
       n_estimators: 1200
-      max_depth: -1
       min_data_in_leaf: 30
       subsample: 0.8
       reg_alpha: 0.1
-      reg_lambda: 1.5
       max_bin: 255
       feature_fraction: 0.8
       bagging_freq: 1
@@ -282,37 +335,41 @@ model_params:
 search_space:
   regression:
     xgboost:
-      max_depth: [4, 10]
+      max_depth: [2, 5]
       learning_rate: [0.01, 0.2]
       subsample: [0.6, 1.0]
       colsample_bytree: [0.6, 1.0]
+      reg_lambda: [10, 100]
 
     lightgbm:
-      num_leaves: [31, 127]
+      num_leaves: [7, 31]
       learning_rate: [0.01, 0.2]
       feature_fraction: [0.6, 1.0]
+      reg_lambda: [10, 100]
 
     catboost:
-      depth: [4, 10]
+      depth: [2, 5]
       learning_rate: [0.01, 0.2]
-      l2_leaf_reg: [1, 8]
+      l2_leaf_reg: [10, 100]
 
   classification:
     xgboost:
-      max_depth: [4, 10]
+      max_depth: [2, 5]
       learning_rate: [0.01, 0.2]
       subsample: [0.6, 1.0]
       colsample_bytree: [0.6, 1.0]
+      reg_lambda: [10, 100]
 
     lightgbm:
-      num_leaves: [31, 127]
+      num_leaves: [7, 31]
       learning_rate: [0.01, 0.2]
       feature_fraction: [0.6, 1.0]
+      reg_lambda: [10, 100]
 
     catboost:
-      depth: [4, 10]
+      depth: [2, 5]
       learning_rate: [0.01, 0.2]
-      l2_leaf_reg: [1, 8]
+      l2_leaf_reg: [10, 100]
 
 monitoring:
     drift:
