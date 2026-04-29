@@ -40,7 +40,8 @@ def prepare_predictions_frame(
     subset["close_residual"] = subset["predicted_close"] - subset["actual_close"]
     subset["residual"] = subset["prediction"] - subset["actual_log_return_lead1"]
     if "sign_short" in subset.columns:
-        subset["f1_sign_short"] = (subset["sign_short"] == np.sign(subset["actual_log_return_lead1"]).astype(int)).astype(float)
+        actual_sign = np.where(subset["actual_log_return_lead1"] > 0, 2, np.where(subset["actual_log_return_lead1"] < 0, 0, 1))
+        subset["f1_sign_short"] = (subset["sign_short"].astype(int) == actual_sign).astype(float)
     if "return_short" in subset.columns:
         subset["rmse_return_short"] = np.sqrt(np.square(subset["residual"]))
 

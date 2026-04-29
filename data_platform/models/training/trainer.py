@@ -114,10 +114,9 @@ class Trainer:
         self._log_target_debug_stats(y_val, task_name, task_type, "val")
 
         if task_type == "classification":
-            y_train, label_map = self._encode_classification_labels(y_train, task_name)
-            y_val, _ = self._encode_classification_labels(y_val, task_name, label_map)
-            y_test, _ = self._encode_classification_labels(y_test, task_name, label_map)
-            self._persist_label_mapping(task_name, label_map)
+            y_train = np.asarray(y_train).astype(int)
+            y_val = np.asarray(y_val).astype(int)
+            y_test = np.asarray(y_test).astype(int)
 
         metric_name = task_cfg.get("optimization_metric", self.default_metric)
         direction = _metric_direction(metric_name)
@@ -239,7 +238,7 @@ class Trainer:
             raise ValueError(f"Target NaNs detected for task '{task_name}'")
         if task_type == "classification":
             labels = set(np.asarray(y).astype(int))
-            if not labels.issubset({-1, 0, 1}):
+            if not labels.issubset({0, 1, 2}):
                 raise ValueError(f"Invalid class labels for task '{task_name}': {sorted(labels)}")
 
     def _validate_metrics(self, task_name, task_type, metrics):
@@ -400,28 +399,6 @@ class Trainer:
         artifact_dir = os.path.join("models", "artifacts")
         os.makedirs(artifact_dir, exist_ok=True)
         joblib.dump(list(features), os.path.join(artifact_dir, "feature_columns.pkl"))
-
-    def _persist_label_mapping(self, task_name, label_map):
-        artifact_dir = os.path.join("models", "artifacts")
-        os.makedirs(artifact_dir, exist_ok=True)
-        joblib.dump(label_map, os.path.join(artifact_dir, f"{task_name}.label_map.pkl"))
-
-    def _encode_classification_labels(self, y, task_name, mapping=None):
-        labels = pd.Series(y).astype(int)
-        if mapping is None:
-            if not set(labels.unique()).issubset({-1, 0, 1}):
-                raise ValueError(f"Unexpected labels for task '{task_name}': {sorted(labels.unique().tolist())}")
-            mapping_cfg = (
-                (self.config.get("training") or {}).get("classification_label_mapping")
-                or {"-1": 0, "0": 1, "1": 2}
-            )
-            mapping = {int(k): int(v) for k, v in mapping_cfg.items()}
-        encoded = labels.map(mapping)
-        if encoded.isnull().any():
-            raise ValueError(f"Failed to encode labels for task '{task_name}'")
-        classes = sorted(encoded.unique().tolist())
-        assert classes == list(range(len(classes)))
-        return encoded.astype(int), mapping
 
     def _log_feature_debug_stats(self, X, task_name, split_name):
         nan_count = int(X.isna().sum().sum())

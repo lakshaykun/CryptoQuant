@@ -45,9 +45,9 @@ class InferencePipeline:
             raw = np.asarray(model.predict(X)).reshape(-1)
             if task_name.startswith("sign_"):
                 pred = np.rint(raw).astype(int)
-                pred = np.clip(pred, -1, 1)
+                pred = np.clip(pred, 0, 2)
                 if confidence_threshold > 0:
-                    pred = np.where(np.abs(raw) < confidence_threshold, 0, pred)
+                    pred = np.where(np.abs(raw) < confidence_threshold, 1, pred)
                 outputs[task_name] = pred.tolist()
             else:
                 outputs[task_name] = raw.astype(float).tolist()

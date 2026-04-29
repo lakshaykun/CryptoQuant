@@ -12,10 +12,10 @@ data_config = load_config("configs/data.yaml")
 
 def _compute_sign(value: float, threshold: float) -> int:
     if value > threshold:
-        return 1
+        return 2
     if value < -threshold:
-        return -1
-    return 0
+        return 0
+    return 1
 
 
 def feature_engineering():

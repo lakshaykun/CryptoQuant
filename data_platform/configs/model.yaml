@@ -122,6 +122,10 @@ features : [
 target: "log_return_lead1"
 
 targets:
+  # Classification labels are raw and fixed:
+  # 0 = negative / down move
+  # 1 = neutral / flat move
+  # 2 = positive / up move
   sign:
     threshold: 0.0002
     drop_neutral: false
@@ -143,7 +147,7 @@ models:
     optimization_metric: rmse
     decay_days: 60
     time_split_days:
-      train: 365
+      train: 1095
       val: 30
       test: 7
 
@@ -163,7 +167,7 @@ models:
     optimization_metric: f1
     class_weighting: balanced
     time_split_days:
-      train: 365
+      train: 1095
       val: 30
       test: 7
 
@@ -175,10 +179,6 @@ tuning:
 training:
   decay_days: 30
   min_train_rows: 5000
-  classification_label_mapping:
-    "-1": 0
-    "0": 1
-    "1": 2
 
 optimization_metric: rmse
 

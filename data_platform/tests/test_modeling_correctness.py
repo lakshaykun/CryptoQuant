@@ -57,11 +57,11 @@ def test_inference_feature_alignment_and_output_shape(tmp_path, monkeypatch):
     output = pipeline.run(frame)
     assert "predictions" in output
     assert set(output["predictions"].keys()) == {"return_short", "return_long", "sign_short", "sign_long"}
-    # confidence filter applies to |raw| < 0.2
-    assert output["predictions"]["sign_short"][0] == 0
-    assert output["predictions"]["sign_short"][1] == -1
-    assert output["predictions"]["sign_long"][0] == 0
-    assert output["predictions"]["sign_long"][1] == 1
+    # confidence filter applies to |raw| < 0.2 and neutral maps to class 1
+    assert output["predictions"]["sign_short"][0] == 1
+    assert output["predictions"]["sign_short"][1] == 0
+    assert output["predictions"]["sign_long"][0] == 1
+    assert output["predictions"]["sign_long"][1] == 2
 
 
 def test_mlflow_naming_contract():
