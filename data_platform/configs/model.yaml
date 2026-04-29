@@ -127,7 +127,7 @@ targets:
   # 1 = neutral / flat move
   # 2 = positive / up move
   sign:
-    threshold: 0.0002
+    threshold: 0.002
     drop_neutral: false
 
 models:

@@ -30,8 +30,10 @@ class SilverMarketTransformer:
             "low",
             "close",
             "volume",
+            "quote_volume",
             "trades",
             "taker_buy_base",
+            "taker_buy_quote",
             "date",
         )
 
@@ -59,8 +61,10 @@ class SilverMarketTransformer:
             "cast(low as double) as low",
             "cast(close as double) as close",
             "cast(volume as double) as volume",
+            "cast(quote_volume as double) as quote_volume",
             "cast(trades as int) as trades",
             "cast(taker_buy_base as double) as taker_buy_base",
+            "cast(taker_buy_quote as double) as taker_buy_quote",
             "date"
         )
 
@@ -73,8 +77,10 @@ class SilverMarketTransformer:
             (F.col("low") <= F.col("close")) &
             (F.col("close") <= F.col("high")) &
             (F.col("volume") >= 0) &
+            (F.col("quote_volume") >= 0) &
             (F.col("trades") >= 0) &
-            (F.col("taker_buy_base") >= 0)
+            (F.col("taker_buy_base") >= 0) &
+            (F.col("taker_buy_quote") >= 0)
         )
 
         return df

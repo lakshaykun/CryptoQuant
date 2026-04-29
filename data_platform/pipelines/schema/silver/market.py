@@ -12,10 +12,12 @@ SILVER_MARKET_SCHEMA = StructType([
     StructField("low", DoubleType()),
     StructField("close", DoubleType()),
 
-    StructField("volume", DoubleType()),
+    StructField("volume", DoubleType(), True),
+    StructField("quote_volume", DoubleType(), True),
 
-    StructField("trades", IntegerType()),
-    StructField("taker_buy_base", DoubleType()),
+    StructField("trades", IntegerType(), True),
+    StructField("taker_buy_base", DoubleType(), True),
+    StructField("taker_buy_quote", DoubleType(), True),
 
     # metadata
     StructField("date", DateType()),  # for partitioning
