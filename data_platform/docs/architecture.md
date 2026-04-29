@@ -6,7 +6,8 @@ CryptoQuant is a Binance market MLOps workspace built around batch backfills, li
 
 ```mermaid
 flowchart LR
-    Binance[Binance REST / Vision ZIPs / WebSocket]
+    Binance[Binance REST / WS]
+    Ingestion[ingestion/binance]
     Airflow[Airflow DAGs]
     BatchJobs[Batch ingestion jobs]
     StreamJob[Streaming ingest job]
@@ -33,8 +34,9 @@ flowchart LR
     Monitoring --> SparkStream
     Monitoring --> Airflow
 
-    Binance --> BatchJobs --> RawStage --> Bronze --> Silver --> Gold --> ModelData --> Train --> ModelArtifact --> API
-    Binance --> StreamJob --> Kafka --> SparkStream --> Bronze
+    Binance --> Ingestion
+    Ingestion --> BatchJobs --> RawStage --> Bronze --> Silver --> Gold --> ModelData --> Train --> ModelArtifact --> API
+    Ingestion --> StreamJob --> Kafka --> SparkStream --> Bronze
     Gold --> FeatureBuild --> API
     State --> BatchJobs
     Gold --> Drift
@@ -52,6 +54,11 @@ The tree below is truncated to the directories and files that define the current
 ├── README.md  # project overview
 ├── docker-compose.yml  # local service stack
 ├── .env  # local environment values
+├── ingestion/  # unified Binance REST/WS clients
+│   └── binance/
+│       ├── historical.py  # REST backfill logic
+│       ├── parser.py  # shared schema parsers
+│       └── ws_client.py  # WebSocket stream client
 
 ├── airflow/  # orchestration
 │   ├── README.md  # Airflow notes
@@ -153,8 +160,8 @@ The tree below is truncated to the directories and files that define the current
 
 ├── pipelines/  # data pipeline code
 │   ├── ingestion/
-│   │   ├── batch/  # historical and daily fetchers
-│   │   └── streaming/  # Kafka producers and WS sources
+│   │   ├── batch/  # historical and daily fetchers (using ingestion/)
+│   │   └── streaming/  # Kafka producers and WS sources (using ingestion/)
 │   ├── jobs/
 │   │   ├── batch/  # Medallion (Bronze/Silver/Gold) batch and prediction jobs
 │   │   └── streaming/  # Spark streaming jobs
@@ -168,6 +175,9 @@ The tree below is truncated to the directories and files that define the current
 │   ├── README.md  # script notes
 │   └── run_api.sh  # API launcher
 
+├── tests/  # platform and model validation
+│   └── test_modeling_correctness.py  # E2E logic checks
+│
 └── utils_global/  # shared helpers
     ├── config_loader.py  # YAML loader
     ├── logger.py  # logger helper
@@ -196,3 +206,4 @@ The tree below is truncated to the directories and files that define the current
 - `data_platform/logs/` is present as the mounted log directory used by the Compose stack.
 - The API is launched from `scripts/run_api.sh`, which sources the local virtual environment when available and runs `uvicorn api.app:app`.
 - Drift history is stored in Delta under `delta/state/monitoring/drift_history/`.
+- Platform and model correctness tests are located in `tests/` and can be run via `pytest`.

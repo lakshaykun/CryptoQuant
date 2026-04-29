@@ -4,7 +4,7 @@ This package contains the data movement and transformation layer for CryptoQuant
 
 ## Package map
 
-- [ingestion/](ingestion/) - batch and streaming market ingestion.
+- [ingestion/](ingestion/) - batch and streaming market ingestion (orchestrating the root `ingestion/` module).
 - [transformers/](transformers/) - raw, Bronze, Silver, and Gold DataFrame transforms.
 - [schema/](schema/) - Spark schema definitions for each layer.
 - [storage/](storage/) - Delta Lake readers and writers.

@@ -8,17 +8,20 @@ CryptoQuant is a crypto market MLOps workspace for Binance market data. The proj
 - [airflow/](airflow/) - DAGs for batch data, streaming sync, batch predictions, model training, and drift monitoring.
 - [dashboard/](dashboard/) - Streamlit monitoring and research dashboard.
 - [docker/](docker/) - Container images for the API, Airflow, Spark, Kafka, and stream producer.
+- [ingestion/](ingestion/) - Unified Binance REST and WebSocket clients (migrated from render_api).
 - [models/](models/) - data loading, feature engineering, training, evaluation, inference, and registry helpers.
 - [pipelines/](pipelines/) - Medallion ETL jobs, streaming ingestion, schemas, storage, and validation.
 - [configs/](configs/) - YAML configuration for data, Kafka, Spark, and model settings.
 - [delta/](delta/) - Local Delta Lake storage for raw_data, bronze, silver, gold, predictions, and state.
 - [scripts/](scripts/) - thin launch scripts for local development.
 - [docs/](docs/) - architecture, commands, and data documentation.
+- [tests/](tests/) - platform and model validation tests.
+
 
 ## Runtime Flow
 
-1. Batch ingestion jobs fetch historical Binance data and normalize it into the raw and bronze layers.
-2. Streaming ingestion publishes live market data into Kafka, then Spark Structured Streaming writes it into the same Delta contracts.
+1. Batch ingestion jobs fetch historical Binance data via the `ingestion` module and normalize it into the raw and bronze layers.
+2. Streaming ingestion uses the `ingestion` WebSocket client to publish live market data into Kafka, then Spark Structured Streaming writes it into the same Delta contracts.
 3. Transformation jobs clean, enrich, and promote the data into silver and gold tables.
 4. Training jobs consume the gold feature contract to build and save model artifacts.
 5. Prediction jobs and the FastAPI service reuse the saved artifacts for online and batch scoring.
