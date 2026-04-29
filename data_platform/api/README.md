@@ -5,7 +5,7 @@ FastAPI service for online predictions. The API loads the local model artifact, 
 ## Endpoints
 
 - `GET /` - health check.
-- `POST /predict` - accepts engineered feature rows and returns prediction values.
+- `POST /predict` - accepts engineered feature rows and returns task-wise prediction values under `predictions`.
 - `GET /drift` - returns the latest drift summary and top drifting features from Delta drift history.
 
 ## Key files

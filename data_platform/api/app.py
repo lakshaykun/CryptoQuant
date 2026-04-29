@@ -195,4 +195,4 @@ def predict(data: PredictRequest) -> PredictResponse:
         return prediction
 
     predictions = np.asarray(prediction, dtype=float).reshape(-1)
-    return {"prediction": predictions.tolist()}
+    return {"predictions": {"prediction": predictions.tolist()}}

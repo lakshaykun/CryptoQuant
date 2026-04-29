@@ -1,11 +1,10 @@
-# airflow/dags/batch_predictions_pipeline.py
+# airflow/dags/predictions_pipeline.py
 
 from airflow import DAG
 from airflow.operators.bash import BashOperator
 from airflow.operators.python import PythonOperator
 from datetime import datetime, timedelta
-from airflow.models import Variable
-from airflow.exceptions import AirflowSkipException
+from utils import check_pipeline_var_enabled
 
 
 def build_spark_submit(task_script):
@@ -18,12 +17,8 @@ def build_spark_submit(task_script):
       /opt/app/{task_script}
     """
 
-def check_enabled():
-    if Variable.get("predictions_pipeline_enabled", default_var="false") != "true":
-        raise AirflowSkipException("Pipeline not enabled yet")
-
 with DAG(
-    dag_id="stream_predictions_pipeline",
+    dag_id="predictions_pipeline",
     start_date=datetime(2024, 1, 1),
     schedule=None,
     catchup=False,
@@ -33,7 +28,8 @@ with DAG(
     
     check_pipeline = PythonOperator(
         task_id="check_pipeline",
-        python_callable=check_enabled,
+        python_callable=check_pipeline_var_enabled,
+        op_kwargs={"var_name": "predictions_enabled"},
     )
 
     predict = BashOperator(
@@ -42,7 +38,7 @@ with DAG(
             "pipelines/jobs/batch/predictions.py"
         ),
         retries=4,
-        retry_delay=timedelta(minutes=2),
+        retry_delay=timedelta(seconds=10),
     )
 
     check_pipeline >> predict

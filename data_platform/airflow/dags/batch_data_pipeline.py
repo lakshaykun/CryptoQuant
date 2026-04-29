@@ -6,6 +6,7 @@ from airflow.operators.python import PythonOperator
 from datetime import datetime, timedelta
 from pipelines.jobs.batch.cleanup_raw import cleanup_task
 from airflow.operators.trigger_dagrun import TriggerDagRunOperator
+from utils import disable_pipeline_vars, enable_pipeline_vars
 
 def build_spark_submit(task_script):
     return f"""
@@ -25,6 +26,12 @@ with DAG(
     max_active_runs=1,
     is_paused_upon_creation=False
 ) as dag:
+    
+    disable_pipeline_task = PythonOperator(
+        task_id="disable_pipeline_task",
+        python_callable=disable_pipeline_vars,
+        op_kwargs={"vars": ["model_training_enabled", "predictions_enabled"]},
+    )
 
     ingest_historical = BashOperator(
         task_id="ingest_historical",
@@ -78,11 +85,17 @@ with DAG(
         retry_delay=timedelta(seconds=10),
     )
 
-    trigger_training = TriggerDagRunOperator(
-        task_id="trigger_training",
-        trigger_dag_id="model_training_bootstrap"
+    enable_model_training_task = PythonOperator(
+        task_id="enable_model_training_task",
+        python_callable=enable_pipeline_vars,
+        op_kwargs={"vars": ["model_training_enabled"]},
     )
 
-    ingest_historical >> bronze
-    ingest_today >> bronze
-    bronze >> silver >> gold >> cleanup >> trigger_training
+    trigger_training = TriggerDagRunOperator(
+        task_id="trigger_training",
+        trigger_dag_id="model_training_pipeline",
+    )
+
+    disable_pipeline_task >> (ingest_historical, ingest_today) >> bronze >> silver >> gold 
+    gold >> (cleanup, enable_model_training_task)
+    enable_model_training_task >> trigger_training

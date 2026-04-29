@@ -1,15 +1,7 @@
 from datetime import datetime
+from typing import Dict, List, Optional
 
 from pydantic import BaseModel
-from typing import List, Optional
-
-from pydantic import BaseModel
-from typing import Optional
-from datetime import datetime
-
-from pydantic import BaseModel
-from datetime import datetime
-from typing import Optional
 
 
 class CryptoFeatures(BaseModel):
@@ -80,5 +72,6 @@ class CryptoFeatures(BaseModel):
 class PredictRequest(BaseModel):
     data: List[CryptoFeatures]
 
+
 class PredictResponse(BaseModel):
-    prediction: List[float]
+    predictions: Dict[str, List[float | int]]

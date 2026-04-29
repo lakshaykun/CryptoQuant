@@ -3,13 +3,8 @@
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from datetime import datetime, timedelta
-from airflow.models import Variable
-from airflow.exceptions import AirflowSkipException
+from utils import check_pipeline_var_enabled, enable_pipeline_vars
 
-
-def check_enabled():
-    if Variable.get("model_training_enabled", default_var="false") != "true":
-        raise AirflowSkipException("Model training not enabled yet")
 
 # Task wrapper functions to avoid import issues in Airflow
 def validate_schema_task_wrapper():
@@ -37,9 +32,10 @@ with DAG(
     is_paused_upon_creation=False
 ) as dag:
 
-    check_enabled_task = PythonOperator(
-        task_id="check_enabled",
-        python_callable=check_enabled,
+    check_enabled_pipeline_task = PythonOperator(
+        task_id="check_enabled_pipeline_task",
+        python_callable=check_pipeline_var_enabled,
+        op_kwargs={"var_name": "model_training_enabled"},
     )
 
     load_data_task = PythonOperator(
@@ -63,4 +59,10 @@ with DAG(
         execution_timeout=timedelta(minutes=60),
     )
 
-    check_enabled_task >> load_data_task >> validate_schema_task >> feature_engineering_task >> train_model_task
+    enable_predictions_task = PythonOperator(
+        task_id="enable_predictions_task",
+        python_callable=enable_pipeline_vars,
+        op_kwargs={"vars": ["predictions_enabled"]},
+    )
+
+    check_enabled_pipeline_task >> load_data_task >> validate_schema_task >> feature_engineering_task >> train_model_task >> enable_predictions_task

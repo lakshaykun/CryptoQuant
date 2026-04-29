@@ -36,8 +36,8 @@ with DAG(
     )
 
     trigger_predictions = TriggerDagRunOperator(
-        task_id="trigger_stream_pipeline",
-        trigger_dag_id="stream_predictions_pipeline",
+        task_id="trigger_predictions_pipeline",
+        trigger_dag_id="predictions_pipeline",
     )
 
     ingest >> trigger_predictions
