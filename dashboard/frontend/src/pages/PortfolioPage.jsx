@@ -1,8 +1,8 @@
-export default function PrescriptivePage() {
+export default function PortfolioPage() {
   return (
     <div className="placeholder-page">
-      <div className="placeholder-icon">💡</div>
-      <h2>Prescriptive Analytics</h2>
+      <div className="placeholder-icon">💼</div>
+      <h2>Portfolio Management</h2>
       <p>
         This section will provide portfolio-level recommendations, position sizing,
         and risk-adjusted trade signals once portfolio data is integrated.

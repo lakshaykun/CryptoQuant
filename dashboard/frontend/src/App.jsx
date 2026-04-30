@@ -2,10 +2,8 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import { DashboardProvider } from './context/DashboardContext'
 import { SideNav } from './components/SideNav'
 import { SymbolSelector } from './components/SymbolSelector'
-import DescriptivePage  from './pages/DescriptivePage'
-import DiagnosticPage   from './pages/DiagnosticPage'
-import PredictivePage   from './pages/PredictivePage'
-import PrescriptivePage from './pages/PrescriptivePage'
+import DashboardPage    from './pages/DashboardPage'
+import PortfolioPage    from './pages/PortfolioPage'
 
 export default function App() {
   return (
@@ -20,11 +18,9 @@ export default function App() {
           </header>
           <main className="page-body">
             <Routes>
-              <Route path="/" element={<Navigate to="/descriptive" replace />} />
-              <Route path="/descriptive"  element={<DescriptivePage />} />
-              <Route path="/diagnostic"   element={<DiagnosticPage />} />
-              <Route path="/predictive"   element={<PredictivePage />} />
-              <Route path="/prescriptive" element={<PrescriptivePage />} />
+              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+              <Route path="/dashboard"  element={<DashboardPage />} />
+              <Route path="/portfolio"  element={<PortfolioPage />} />
             </Routes>
           </main>
         </div>

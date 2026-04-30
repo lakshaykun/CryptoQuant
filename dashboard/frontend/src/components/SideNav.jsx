@@ -1,10 +1,8 @@
 import { NavLink } from 'react-router-dom'
 
 const links = [
-  { to: '/descriptive',  icon: '📊', label: 'Descriptive'  },
-  { to: '/diagnostic',   icon: '🔍', label: 'Diagnostic'   },
-  { to: '/predictive',   icon: '🔮', label: 'Predictive'   },
-  { to: '/prescriptive', icon: '💡', label: 'Prescriptive', badge: 'Soon' },
+  { to: '/dashboard', icon: '📊', label: 'Market Overview' },
+  { to: '/portfolio', icon: '💼', label: 'Portfolio', badge: 'Soon' },
 ]
 
 export function SideNav() {
