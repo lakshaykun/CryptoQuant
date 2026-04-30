@@ -308,6 +308,51 @@ class GoldMarketTransformer:
 
         df = df.withColumnRenamed("log_return_raw", "return_current")
 
+        # backward compatibility
+        df = df.withColumn("log_return", F.col("return_current"))
+        df = df.withColumn(
+            "log_return_lag2",
+            F.lag("log_return", 2).over(base_window)
+        )
+        df = df.withColumn(
+            "buy_ratio_lag1",
+            F.lag("buy_ratio", 1).over(base_window)
+        )
+        df = df.withColumn("ma_5", F.col("ma_5_tmp"))
+        df = df.withColumn("ma_20", F.col("ma_20_tmp"))
+        df = df.withColumn(
+            "volume_5",
+            F.avg("volume").over(window_5)
+        )
+        df = df.withColumn(
+            "buy_ratio_5",
+            F.avg("buy_ratio").over(window_5)
+        )
+        df = df.withColumn(
+            "momentum",
+            F.col("close") - F.lag("close", 5).over(base_window)
+        )
+        df = df.withColumn(
+            "price_range_ratio",
+            GoldMarketTransformer._safe_divide(
+                F.col("high") - F.col("low"),
+                F.col("open")
+            )
+        )
+        df = df.withColumn("hour", F.hour("open_time"))
+        df = df.withColumn(
+            "day_of_week",
+            F.dayofweek("open_time")
+        )
+        df = df.withColumn(
+            "trend_strength",
+            GoldMarketTransformer._safe_divide(
+                F.sum("log_return").over(window_5),
+                F.sum(F.abs("log_return")).over(window_5)
+            )
+        )
+                
+        # drop intermediate columns
         df = df.drop(
             "ma_5_tmp",
             "ma_20_tmp",

@@ -55,24 +55,24 @@ services:
     volumes:
       - .:/opt/app
 
-  dashboard:
-    build:
-      dockerfile: docker/dashboard/Dockerfile
-    working_dir: /opt/app
-    depends_on:
-      - mlflow
-    environment:
-      - PYTHONPATH=/opt/app
-      - STREAMLIT_SERVER_ADDRESS=0.0.0.0
-      - STREAMLIT_SERVER_HEADLESS=true
-      - STREAMLIT_SERVER_PORT=8501
-      - STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
-      - MLFLOW_TRACKING_URI=http://mlflow:5000
-    volumes:
-      - .:/opt/app
-    ports:
-      - "8501:8501"
-    command: streamlit run dashboard/app.py --server.address 0.0.0.0 --server.port 8501
+  # dashboard:
+  #   build:
+  #     dockerfile: docker/dashboard/Dockerfile
+  #   working_dir: /opt/app
+  #   depends_on:
+  #     - mlflow
+  #   environment:
+  #     - PYTHONPATH=/opt/app
+  #     - STREAMLIT_SERVER_ADDRESS=0.0.0.0
+  #     - STREAMLIT_SERVER_HEADLESS=true
+  #     - STREAMLIT_SERVER_PORT=8501
+  #     - STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
+  #     - MLFLOW_TRACKING_URI=http://mlflow:5000
+  #   volumes:
+  #     - .:/opt/app
+  #   ports:
+  #     - "8501:8501"
+  #   command: streamlit run dashboard/app.py --server.address 0.0.0.0 --server.port 8501
 
   api:
     build:

@@ -71,6 +71,20 @@ GOLD_MARKET_SCHEMA = StructType([
     StructField("hour_sin", DoubleType()),
     StructField("hour_cos", DoubleType()),
 
+    # backward compatibility
+    StructField("log_return", DoubleType()),
+    StructField("log_return_lag2", DoubleType()),
+    StructField("buy_ratio_lag1", DoubleType()),
+    StructField("ma_5", DoubleType()),
+    StructField("ma_20", DoubleType()),
+    StructField("volume_5", DoubleType()),
+    StructField("buy_ratio_5", DoubleType()),
+    StructField("momentum", DoubleType()),
+    StructField("price_range_ratio", DoubleType()),
+    StructField("hour", IntegerType()),
+    StructField("day_of_week", IntegerType()),
+    StructField("trend_strength", DoubleType()),
+
     # metadata
     StructField("is_valid_feature_row", BooleanType(), True),
     StructField("date", DateType(), True),

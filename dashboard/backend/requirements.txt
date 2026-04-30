@@ -1,0 +1,10 @@
+sqlalchemy
+# fastapi
+# uvicorn
+asyncpg
+pydantic
+python-dotenv
+alembic
+psycopg2-binary
+# fastapi-cache2
+# jinja2

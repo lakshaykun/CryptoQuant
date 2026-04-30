@@ -1,0 +1,52 @@
+services:
+  timescaledb:
+    image: timescale/timescaledb:latest-pg16
+    container_name: crypto-timescaledb
+    ports:
+      - "5434:5432"
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - timescaledb-data:/var/lib/postgresql/data
+
+  delta-market-sync:
+    build:
+      context: .
+      dockerfile: delta_sync/market/Dockerfile
+    container_name: crypto-delta-market-sync
+    depends_on:
+      - timescaledb
+    env_file:
+      - .env
+    volumes:
+      - ${GOLD_MARKET_PATH_LOCAL}:${GOLD_MARKET_PATH}
+
+  delta-sentiment-sync:
+    build:
+      context: .
+      dockerfile: delta_sync/sentiment/Dockerfile
+    container_name: crypto-delta-sentiment-sync
+    depends_on:
+      - timescaledb
+    env_file:
+      - .env
+    volumes:
+      - ${GOLD_SENTIMENT_PATH}:${GOLD_SENTIMENT_PATH}
+      - ${SILVER_SENTIMENT_PATH}:${SILVER_SENTIMENT_PATH}
+
+  dashboard-api:
+    build:
+      context: .
+      dockerfile: dashboard/backend/Dockerfile
+    container_name: crypto-dashboard-api
+    ports:
+      - "8000:8000"
+    depends_on:
+      - timescaledb
+    env_file:
+      - .env
+
+volumes:
+  timescaledb-data:
