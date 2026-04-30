@@ -50,7 +50,7 @@ def read_full(symbols: list[str] | None = None) -> pd.DataFrame:
 
 
 def read_incremental(
-    last_synced_time: datetime.datetime,
+    last_synced_map: dict,
     symbols: list[str] | None = None
 ) -> pd.DataFrame:
     """
@@ -61,7 +61,11 @@ def read_incremental(
         df = table.to_pandas()
         df = df[[c for c in MARKET_COLUMNS if c in df.columns]]
 
-        df = df[df["open_time"] > pd.Timestamp(last_synced_time, tz="UTC")]
+        last_df = pd.DataFrame(list(last_synced_map.items()), columns=['symbol', 'last_sync'])
+        last_df['last_sync'] = pd.to_datetime(last_df['last_sync'], utc=True)
+        df = df.merge(last_df, on='symbol', how='left')
+        df = df[df['last_sync'].isna() | (df['open_time'] > df['last_sync'])]
+        df = df.drop(columns=['last_sync'])
 
         if symbols:
             df = df[df["symbol"].isin(symbols)]
@@ -89,14 +93,18 @@ def read_predictions_full(symbols: list[str] | None = None) -> pd.DataFrame:
 
 
 def read_predictions_incremental(
-    last_synced_time: datetime.datetime,
+    last_synced_map: dict,
     symbols: list[str] | None = None
 ) -> pd.DataFrame:
     try:
         table = DeltaTable(get_predictions_path())
         df = table.to_pandas()
         df = df[[c for c in PREDICTIONS_COLUMNS if c in df.columns]]
-        df = df[df["open_time"] > pd.Timestamp(last_synced_time, tz="UTC")]
+        last_df = pd.DataFrame(list(last_synced_map.items()), columns=['symbol', 'last_sync'])
+        last_df['last_sync'] = pd.to_datetime(last_df['last_sync'], utc=True)
+        df = df.merge(last_df, on='symbol', how='left')
+        df = df[df['last_sync'].isna() | (df['open_time'] > df['last_sync'])]
+        df = df.drop(columns=['last_sync'])
         if symbols:
             df = df[df["symbol"].isin(symbols)]
         logger.info(f"[reader] Predictions incremental read from {last_synced_time} → {len(df)} rows")

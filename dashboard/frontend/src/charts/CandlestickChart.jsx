@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { createChart, ColorType, CrosshairMode } from 'lightweight-charts'
+import { createChart, ColorType, CrosshairMode, CandlestickSeries, LineSeries, HistogramSeries } from 'lightweight-charts'
 
 const COLORS = {
   bg:        '#181d24',
@@ -44,7 +44,7 @@ export function CandlestickChart({ candles }) {
     const chart = buildChart(containerRef.current)
     chartRef.current = chart
 
-    const candleSeries = chart.addCandlestickSeries({
+    const candleSeries = chart.addSeries(CandlestickSeries, {
       upColor:        COLORS.upBar,
       downColor:      COLORS.downBar,
       borderVisible:  false,
@@ -52,14 +52,14 @@ export function CandlestickChart({ candles }) {
       wickDownColor:  COLORS.downBar,
     })
 
-    const ma5Series = chart.addLineSeries({
+    const ma5Series = chart.addSeries(LineSeries, {
       color:       COLORS.ma5,
       lineWidth:   1,
       priceLineVisible: false,
       lastValueVisible: false,
     })
 
-    const ma20Series = chart.addLineSeries({
+    const ma20Series = chart.addSeries(LineSeries, {
       color:       COLORS.ma20,
       lineWidth:   1,
       priceLineVisible: false,
@@ -67,7 +67,7 @@ export function CandlestickChart({ candles }) {
     })
 
     // Volume pane — separate price scale
-    const volSeries = chart.addHistogramSeries({
+    const volSeries = chart.addSeries(HistogramSeries, {
       color:           COLORS.volume,
       priceFormat:     { type: 'volume' },
       priceScaleId:    'vol',
@@ -122,12 +122,12 @@ export function ForecastCandlestickChart({ candles, forecast }) {
     if (!containerRef.current) return
     const chart = buildChart(containerRef.current)
 
-    const candleSeries = chart.addCandlestickSeries({
+    const candleSeries = chart.addSeries(CandlestickSeries, {
       upColor: COLORS.upBar, downColor: COLORS.downBar,
       borderVisible: false, wickUpColor: COLORS.upBar, wickDownColor: COLORS.downBar,
     })
 
-    const forecastLine = chart.addLineSeries({
+    const forecastLine = chart.addSeries(LineSeries, {
       color:           COLORS.forecast,
       lineWidth:       2,
       lineStyle:       2,   // dashed

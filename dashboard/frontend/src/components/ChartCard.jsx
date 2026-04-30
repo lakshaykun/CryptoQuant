@@ -5,7 +5,7 @@ export function ChartCard({ title, controls, children, minHeight = 280 }) {
         <span className="card-title">{title}</span>
         {controls && <div className="card-controls">{controls}</div>}
       </div>
-      <div className="card-body" style={{ minHeight }}>
+      <div className="card-body" style={{ minHeight, display: 'flex', flexDirection: 'column' }}>
         {children}
       </div>
     </div>

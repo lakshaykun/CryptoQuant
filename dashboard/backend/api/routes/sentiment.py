@@ -17,6 +17,8 @@ async def get_sentiment_timeline(
     pool      : asyncpg.Pool = Depends(get_conn)
 ):
     try:
+        # Normalize symbol for DB lookup (e.g. BTCUSDT -> BTC)
+        db_symbol = symbol.upper().replace("USDT", "")
         async with pool.acquire() as conn:
             rows = await conn.fetch("""
                 SELECT window_start, sentiment_index, avg_confidence, message_count
@@ -26,7 +28,7 @@ async def get_sentiment_timeline(
                   AND ($3::timestamptz IS NULL OR window_start <= $3)
                 ORDER BY window_start DESC
                 LIMIT $4
-            """, symbol.upper(), from_time, to_time, limit)
+            """, db_symbol, from_time, to_time, limit)
 
         if not rows:
             raise HTTPException(status_code=404, detail=f"No sentiment data for {symbol}")
@@ -48,6 +50,7 @@ async def get_sentiment_by_source(
     pool      : asyncpg.Pool = Depends(get_conn)
 ):
     try:
+        db_symbol = symbol.upper().replace("USDT", "")
         async with pool.acquire() as conn:
             rows = await conn.fetch("""
                 SELECT
@@ -60,7 +63,7 @@ async def get_sentiment_by_source(
                   AND ($3::timestamptz IS NULL OR event_time <= $3)
                 GROUP BY source
                 ORDER BY message_count DESC
-            """, symbol.upper(), from_time, to_time)
+            """, db_symbol, from_time, to_time)
 
         if not rows:
             raise HTTPException(status_code=404, detail=f"No source data for {symbol}")
@@ -80,10 +83,10 @@ async def get_sentiment_summary(
     pool  : asyncpg.Pool = Depends(get_conn)
 ):
     try:
+        db_symbol = symbol.upper().replace("USDT", "")
         async with pool.acquire() as conn:
             row = await conn.fetchrow("""
                 SELECT
-                    symbol,
                     sentiment_index AS latest_sentiment,
                     avg_confidence,
                     message_count   AS total_messages,
@@ -92,12 +95,13 @@ async def get_sentiment_summary(
                 WHERE symbol = $1
                 ORDER BY window_start DESC
                 LIMIT 1
-            """, symbol.upper())
+            """, db_symbol)
 
         if not row:
             raise HTTPException(status_code=404, detail=f"No sentiment summary for {symbol}")
 
-        return SentimentSummary(**dict(row))
+        # Frontend expects BTCUSDT, but DB has BTC
+        return SentimentSummary(symbol=symbol.upper(), **dict(row))
 
     except HTTPException:
         raise

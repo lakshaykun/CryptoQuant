@@ -12,9 +12,9 @@ logger = get_logger(__name__)
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 
-async def get_last_synced_time(conn: asyncpg.Connection, table: str) -> datetime.datetime | None:
-    result = await conn.fetchval(f"SELECT MAX(open_time) FROM {table}")
-    return result
+async def get_last_synced_time(conn: asyncpg.Connection, table: str) -> dict:
+    rows = await conn.fetch(f"SELECT symbol, MAX(open_time) as latest FROM {table} GROUP BY symbol")
+    return {r['symbol']: r['latest'] for r in rows}
 
 async def run():
     logger.info("[job] Starting sync run")

@@ -95,21 +95,33 @@ export default function PortfolioPage() {
 
   const riskQ = useQuery({
     queryKey: ['portfolioRisk', pfId],
-    queryFn: async () => (await fetch(`${API_BASE}/${pfId}/risk`)).json(),
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/${pfId}/risk`);
+      if (!res.ok) return { positions: [] };
+      return res.json();
+    },
     enabled: !!pfId,
     refetchInterval: 30000
   });
 
   const scoresQ = useQuery({
     queryKey: ['portfolioScores', pfId],
-    queryFn: async () => (await fetch(`${API_BASE}/${pfId}/scores`)).json(),
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/${pfId}/scores`);
+      if (!res.ok) return [];
+      return res.json();
+    },
     enabled: !!pfId,
     refetchInterval: 30000
   });
 
   const suggestionsQ = useQuery({
     queryKey: ['portfolioSuggestions', pfId],
-    queryFn: async () => (await fetch(`${API_BASE}/${pfId}/suggestions`)).json(),
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/${pfId}/suggestions`);
+      if (!res.ok) return [];
+      return res.json();
+    },
     enabled: !!pfId,
     refetchInterval: 30000
   });
@@ -166,10 +178,10 @@ export default function PortfolioPage() {
 
   const isLoading = detailQ.isLoading || riskQ.isLoading || scoresQ.isLoading || suggestionsQ.isLoading;
 
-  const positions = detailQ.data?.positions || [];
-  const riskItems = riskQ.data?.positions || [];
-  const scores = scoresQ.data || [];
-  const suggestions = suggestionsQ.data || [];
+  const positions = Array.isArray(detailQ.data?.positions) ? detailQ.data.positions : [];
+  const riskItems = Array.isArray(riskQ.data?.positions) ? riskQ.data.positions : [];
+  const scores = Array.isArray(scoresQ.data) ? scoresQ.data : [];
+  const suggestions = Array.isArray(suggestionsQ.data) ? suggestionsQ.data : [];
 
   const allocationData = positions.map(p => ({
     name: p.symbol,
@@ -296,7 +308,7 @@ export default function PortfolioPage() {
       <div className="grid-2">
         <ChartCard title="Current Allocation" minHeight={280}>
           {isLoading ? <ChartPlaceholder loading /> :
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height={260}>
               <PieChart>
                 <Pie data={allocationData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} fill="#b388ff" paddingAngle={3} dataKey="value">
                   {allocationData.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
@@ -310,7 +322,7 @@ export default function PortfolioPage() {
 
         <ChartCard title="Suggested Allocation (Model Optimized)" minHeight={280}>
           {isLoading ? <ChartPlaceholder loading /> :
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height={260}>
               <PieChart>
                 <Pie data={expectedAllocationData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} fill="#1de9b6" paddingAngle={3} dataKey="value">
                   {expectedAllocationData.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[(index+3) % COLORS.length]} />)}
@@ -406,12 +418,13 @@ export default function PortfolioPage() {
       <div className="grid-2">
         <ChartCard title="Risk Exposure (Weighted Volatility)" minHeight={300}>
            {isLoading ? <ChartPlaceholder loading /> :
-             <ResponsiveContainer width="100%" height="100%">
+             <ResponsiveContainer width="100%" height={260}>
                <BarChart data={riskBarData} margin={{ top: 20, right: 30, left: 0, bottom: 5 }}>
                  <CartesianGrid strokeDasharray="3 3" opacity={0.1} />
-                 <XAxis dataKey="name" stroke="var(--text-sec)" />
-                 <YAxis stroke="var(--text-sec)" />
+                 <XAxis dataKey="name" stroke="var(--text-sec)" tick={{ fill: 'var(--text-secondary)', fontSize: 10 }} />
+                 <YAxis stroke="var(--text-sec)" tick={{ fill: 'var(--text-secondary)', fontSize: 10 }} />
                  <RechartsTooltip cursor={<BarCrosshair background="rgba(255,255,255,0.05)" />} />
+                 <Legend wrapperStyle={{ color: 'var(--text-secondary)', fontSize: 12, paddingTop: '10px' }} />
                  <Bar dataKey="risk" fill="#ff9100" radius={[4,4,0,0]} />
                </BarChart>
              </ResponsiveContainer>
@@ -420,13 +433,14 @@ export default function PortfolioPage() {
 
         <ChartCard title="Risk vs Return Tradeoff" minHeight={300}>
           {isLoading ? <ChartPlaceholder loading /> :
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height={260}>
               <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" opacity={0.1} />
-                <XAxis type="number" dataKey="volatility" name="Volatility" stroke="var(--text-sec)" tickFormatter={v => v.toFixed(3)} />
-                <YAxis type="number" dataKey="return" name="Log Return" stroke="var(--text-sec)" tickFormatter={v => v.toFixed(4)} />
+                <XAxis type="number" dataKey="volatility" name="Volatility" stroke="var(--text-sec)" tick={{ fill: 'var(--text-secondary)', fontSize: 10 }} tickFormatter={v => v.toFixed(3)} />
+                <YAxis type="number" dataKey="return" name="Log Return" stroke="var(--text-sec)" tick={{ fill: 'var(--text-secondary)', fontSize: 10 }} tickFormatter={v => v.toFixed(4)} />
                 <ZAxis type="number" dataKey="size" range={[50, 400]} />
                 <RechartsTooltip cursor={{strokeDasharray: '3 3'}} formatter={(val) => val.toFixed(4)} />
+                <Legend wrapperStyle={{ color: 'var(--text-secondary)', fontSize: 12, paddingTop: '10px' }} />
                 <Scatter name="Positions" data={scatterData} fill="#b388ff">
                   {scatterData.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
                 </Scatter>
@@ -439,12 +453,13 @@ export default function PortfolioPage() {
       {/* 4. Global Score Leaderboard */}
       <ChartCard title="Risk-Adjusted Score Global Leaderboard" minHeight={300}>
          {isLoading ? <ChartPlaceholder loading /> :
-           <ResponsiveContainer width="100%" height="100%">
+           <ResponsiveContainer width="100%" height={300}>
              <BarChart data={scoreLeaders} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
                <CartesianGrid strokeDasharray="3 3" opacity={0.1} />
-               <XAxis type="number" stroke="var(--text-sec)" />
-               <YAxis dataKey="name" type="category" stroke="var(--text-sec)" />
+               <XAxis type="number" stroke="var(--text-sec)" tick={{ fill: 'var(--text-secondary)', fontSize: 10 }} />
+               <YAxis dataKey="name" type="category" stroke="var(--text-sec)" width={80} tick={{ fill: 'var(--text-secondary)', fontSize: 10 }} />
                <RechartsTooltip cursor={<BarCrosshair background="rgba(255,255,255,0.05)" />} />
+               <Legend wrapperStyle={{ color: 'var(--text-secondary)', fontSize: 12, paddingTop: '10px' }} />
                <Bar dataKey="score" layout="vertical" radius={[0,4,4,0]}>
                  {scoreLeaders.map((entry, index) => (
                    <Cell key={`cell-${index}`} fill={entry.in_portfolio ? '#1de9b6' : '#00e5ff'} opacity={entry.in_portfolio ? 1 : 0.6} />

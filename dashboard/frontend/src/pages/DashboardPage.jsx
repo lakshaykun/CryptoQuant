@@ -138,11 +138,9 @@ export default function DashboardPage() {
         }
         minHeight={420}
       >
-        {(candlesQ.isLoading || forecastQ.isLoading)
-          ? <ChartPlaceholder loading />
-          : candlesQ.isError
-            ? <ChartPlaceholder error={candlesQ.error} />
-            : <ForecastCandlestickChart candles={candlesQ.data} forecast={forecastQ.data} />
+        {(!candlesQ.data?.length || !forecastQ.data)
+          ? <ChartPlaceholder loading={candlesQ.isLoading || forecastQ.isLoading} error={candlesQ.error} empty={!candlesQ.data?.length} />
+          : <ForecastCandlestickChart candles={candlesQ.data} forecast={forecastQ.data} />
         }
       </ChartCard>
 
@@ -151,11 +149,9 @@ export default function DashboardPage() {
         controls={<LimitInput value={sentimentLimit} onChange={setSentimentLimit} max={2000} />}
         minHeight={280}
       >
-        {(sentQ.isLoading || candlesQ.isLoading)
-          ? <ChartPlaceholder loading />
-          : sentQ.isError || !sentQ.data?.length
-            ? <ChartPlaceholder error={sentQ.error} empty={!sentQ.data?.length} />
-            : <SentimentPriceChart candles={candlesQ.data} sentiment={sentQ.data} />
+        {(!sentQ.data?.length || !candlesQ.data?.length)
+          ? <ChartPlaceholder loading={sentQ.isLoading || candlesQ.isLoading} error={sentQ.error} empty={!sentQ.data?.length} />
+          : <SentimentPriceChart candles={candlesQ.data} sentiment={sentQ.data} />
       }
       </ChartCard>
 
@@ -166,7 +162,7 @@ export default function DashboardPage() {
           title="Volatility Ribbon + Ratio"
           controls={<LimitInput value={volatilityLimit} onChange={setVolatilityLimit} max={2000} />}
         >
-          {volQ.isLoading || volQ.isError || !volQ.data?.length
+          {!volQ.data?.length
             ? <ChartPlaceholder loading={volQ.isLoading} error={volQ.error} empty={!volQ.data?.length} />
             : <VolatilityRatioChart data={volQ.data} />
           }
@@ -176,7 +172,7 @@ export default function DashboardPage() {
           title="Momentum Profile Scatter"
           controls={<LimitInput value={momentumLimit} onChange={setMomentumLimit} max={1000} />}
         >
-          {momQ.isLoading || momQ.isError || !momQ.data?.length
+          {!momQ.data?.length
             ? <ChartPlaceholder loading={momQ.isLoading} error={momQ.error} empty={!momQ.data?.length} />
             : <MomentumScatterChart data={momQ.data} />
           }
@@ -188,8 +184,8 @@ export default function DashboardPage() {
         controls={<LimitInput value={momentumLimit} onChange={setMomentumLimit} max={1000} />}
         minHeight={250}
       >
-        {momQ.isLoading || momQ.isError || !momQ.data?.length
-          ? <ChartPlaceholder loading={momQ.isLoading} error={momQ.error} empty={!momQ.data?.length} />
+        {!momQ.data?.length
+            ? <ChartPlaceholder loading={momQ.isLoading} error={momQ.error} empty={!momQ.data?.length} />
           : <VolumeSpikeChart data={momQ.data} />
         }
       </ChartCard>
@@ -201,8 +197,8 @@ export default function DashboardPage() {
         controls={<LimitInput value={ofLimit} onChange={setOfLimit} max={1000} />}
         minHeight={280}
       >
-        {ofQ.isLoading || ofQ.isError || !ofQ.data?.length
-          ? <ChartPlaceholder loading={ofQ.isLoading} error={ofQ.error} empty={!ofQ.data?.length} />
+        {!ofQ.data?.length
+            ? <ChartPlaceholder loading={ofQ.isLoading} error={ofQ.error} empty={!ofQ.data?.length} />
           : <OrderFlowChart data={ofQ.data} />
         }
       </ChartCard>
@@ -212,7 +208,7 @@ export default function DashboardPage() {
           title="Candlestick Anatomy (Body Size · Price Range Ratio)"
           controls={<LimitInput value={microLimit} onChange={setMicroLimit} max={2000} />}
         >
-          {microQ.isLoading || microQ.isError || !microQ.data?.length
+          {!microQ.data?.length
             ? <ChartPlaceholder loading={microQ.isLoading} error={microQ.error} empty={!microQ.data?.length} />
             : <CandleAnatomyChart data={microQ.data} />
           }
@@ -222,7 +218,7 @@ export default function DashboardPage() {
           title="Log Return Distribution"
           controls={<LimitInput value={returnLimit} onChange={setReturnLimit} max={5000} />}
         >
-          {returnsQ.isLoading || returnsQ.isError || !returnsQ.data?.length
+          {!returnsQ.data?.length
             ? <ChartPlaceholder loading={returnsQ.isLoading} error={returnsQ.error} empty={!returnsQ.data?.length} />
             : <ReturnHistogram data={returnsQ.data} />
           }
@@ -230,8 +226,8 @@ export default function DashboardPage() {
       </div>
 
       <ChartCard title="Hourly × Weekday Return Heatmap" minHeight={220}>
-        {heatmapQ.isLoading || heatmapQ.isError || !heatmapQ.data?.length
-          ? <ChartPlaceholder loading={heatmapQ.isLoading} error={heatmapQ.error} empty={!heatmapQ.data?.length} />
+        {!heatmapQ.data?.length
+            ? <ChartPlaceholder loading={heatmapQ.isLoading} error={heatmapQ.error} empty={!heatmapQ.data?.length} />
           : <HeatmapChart data={heatmapQ.data} />
         }
       </ChartCard>
@@ -244,7 +240,7 @@ export default function DashboardPage() {
       </div>
       <div className="grid-2">
         <ChartCard title="Sentiment per Source">
-          {sentSrcQ.isLoading || sentSrcQ.isError || !sentSrcQ.data?.length
+          {!sentSrcQ.data?.length
             ? <ChartPlaceholder loading={sentSrcQ.isLoading} error={sentSrcQ.error} empty={!sentSrcQ.data?.length} />
             : <SentimentBySourceChart data={sentSrcQ.data} />
           }
@@ -254,7 +250,7 @@ export default function DashboardPage() {
           title="Sentiment–Price Lag Correlation"
           controls={<LagInput value={maxLag} onChange={setMaxLag} />}
         >
-          {lagQ.isLoading || lagQ.isError || !lagQ.data?.length
+          {!lagQ.data?.length
             ? <ChartPlaceholder loading={lagQ.isLoading} error={lagQ.error} empty={!lagQ.data?.length} />
             : <LagCorrelationChart data={lagQ.data} />
           }
@@ -276,7 +272,7 @@ export default function DashboardPage() {
           controls={<LimitInput value={forecastLimit} onChange={setForecastLimit} max={60} />}
           minHeight={300}
         >
-          {forecastQ.isLoading || forecastQ.isError || !forecastQ.data?.length
+          {!forecastQ.data?.length
             ? <ChartPlaceholder loading={forecastQ.isLoading} error={forecastQ.error} empty={!forecastQ.data?.length} />
             : <PredictionVsActualChart data={forecastQ.data} />
           }
