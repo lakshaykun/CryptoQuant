@@ -8,3 +8,4 @@ alembic
 psycopg2-binary
 fastapi-cache2
 jinja2
+pandas

@@ -2,16 +2,16 @@ import { useEffect, useRef } from 'react'
 import { createChart, ColorType, CrosshairMode } from 'lightweight-charts'
 
 const COLORS = {
-  bg:        '#161d2f',
-  border:    '#2a3550',
-  text:      '#8899bb',
-  gridLine:  '#1e2842',
-  upBar:     '#22c55e',
-  downBar:   '#f43f5e',
-  ma5:       '#f59e0b',
-  ma20:      '#a78bfa',
-  volume:    '#4f8ef773',
-  forecast:  '#4f8ef7',
+  bg:        '#181d24',
+  border:    '#252c38',
+  text:      '#94a3b8',
+  gridLine:  '#1d232c',
+  upBar:     '#00e676',
+  downBar:   '#ff4d6d',
+  ma5:       '#ffea00',
+  ma20:      '#1de9b6',
+  volume:    '#00e5ff73',
+  forecast:  '#00e5ff',
 }
 
 function buildChart(container) {
@@ -95,7 +95,7 @@ export function CandlestickChart({ candles }) {
       volSeries.setData(sorted.map(c => ({
         time:  new Date(c.open_time).getTime() / 1000,
         value: c.volume,
-        color: c.close >= c.open ? '#22c55e44' : '#f43f5e44',
+        color: c.close >= c.open ? '#00e67644' : '#ff4d6d44',
       })))
 
       chart.timeScale().fitContent()

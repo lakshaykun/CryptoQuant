@@ -8,6 +8,20 @@ logger = get_logger(__name__)
 
 CONFIG = load_config("data_platform/configs/data.yaml")
 
+MARKET_COLUMNS = [
+    "open_time", "symbol", "open", "high", "low", "close", "volume", "trades",
+    "taker_buy_base", "log_return", "volatility", "imbalance_ratio", "buy_ratio",
+    "log_return_lag1", "log_return_lag2", "buy_ratio_lag1", "ma_5", "ma_20",
+    "volatility_5", "volume_5", "buy_ratio_5", "momentum", "volume_spike",
+    "price_range_ratio", "body_size", "hour", "day_of_week", "trend_strength",
+    "volatility_ratio", "is_valid_feature_row", "date", "ingestion_time"
+]
+
+PREDICTIONS_COLUMNS = [
+    "open_time", "symbol", "date", "prediction", "ingestion_time",
+    "predicted_close", "actual_close", "error", "direction_correct"
+]
+
 
 def get_gold_path() -> str:
     return CONFIG["tables"]["gold_market"]["path"]
@@ -22,6 +36,7 @@ def read_full(symbols: list[str] | None = None) -> pd.DataFrame:
     try:
         table = DeltaTable(get_gold_path())
         df = table.to_pandas()
+        df = df[[c for c in MARKET_COLUMNS if c in df.columns]]
 
         if symbols:
             df = df[df["symbol"].isin(symbols)]
@@ -44,6 +59,7 @@ def read_incremental(
     try:
         table = DeltaTable(get_gold_path())
         df = table.to_pandas()
+        df = df[[c for c in MARKET_COLUMNS if c in df.columns]]
 
         df = df[df["open_time"] > pd.Timestamp(last_synced_time, tz="UTC")]
 
@@ -62,6 +78,7 @@ def read_predictions_full(symbols: list[str] | None = None) -> pd.DataFrame:
     try:
         table = DeltaTable(get_predictions_path())
         df = table.to_pandas()
+        df = df[[c for c in PREDICTIONS_COLUMNS if c in df.columns]]
         if symbols:
             df = df[df["symbol"].isin(symbols)]
         logger.info(f"[reader] Predictions full read → {len(df)} rows")
@@ -78,6 +95,7 @@ def read_predictions_incremental(
     try:
         table = DeltaTable(get_predictions_path())
         df = table.to_pandas()
+        df = df[[c for c in PREDICTIONS_COLUMNS if c in df.columns]]
         df = df[df["open_time"] > pd.Timestamp(last_synced_time, tz="UTC")]
         if symbols:
             df = df[df["symbol"].isin(symbols)]
