@@ -26,6 +26,7 @@ class SentimentExecutionConfig:
     min_lookback_minutes: int
     query_safety_buffer_minutes: int
     source_aliases: dict[str, list[str]]
+    gold_window_seconds: int
 
 
 def _parse_datetime(value: Any) -> datetime | None:
@@ -101,7 +102,10 @@ def load_sentiment_pipeline_config(mode: str, path: str = "configs/sentiment_pip
 
     common_min_lookback = _parse_positive_int(config.get("min_lookback_minutes"), 1)
     common_buffer = _parse_positive_int(config.get("query_safety_buffer_minutes"), 2)
-
+    gold_cfg = config.get("gold", {})
+    if not isinstance(gold_cfg, dict):
+        gold_cfg = {}
+        
     return SentimentExecutionConfig(
         mode=mode_key,
         sources=_normalize_sources(mode_cfg.get("sources")),
@@ -117,4 +121,6 @@ def load_sentiment_pipeline_config(mode: str, path: str = "configs/sentiment_pip
         min_lookback_minutes=common_min_lookback,
         query_safety_buffer_minutes=common_buffer,
         source_aliases=_normalize_source_aliases(config.get("source_aliases")),
+        gold_window_seconds=_parse_positive_int(gold_cfg.get("window_seconds"), 300),
     )
+

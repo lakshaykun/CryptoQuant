@@ -18,10 +18,16 @@ _SESSION = requests.Session()
 
 
 def _hf_token() -> str:
-    token = str(os.getenv("HUGGINGFACE_API_KEY", "")).strip().strip('"').strip("'")
-    if not token:
-        raise ValueError("HUGGINGFACE_API_KEY is not configured")
-    return token
+    candidates = (
+        "HUGGINGFACE_API_KEY",
+        "HF_TOKEN",
+        "HUGGINGFACEHUB_API_TOKEN",
+    )
+    for key in candidates:
+        value = str(os.getenv(key, "")).strip().strip('"').strip("'")
+        if value:
+            return value
+    return ""
 
 
 def _model_id() -> str:
@@ -78,10 +84,12 @@ def _extract_top_prediction(result: Any) -> tuple[str, float]:
 
 def predict_cryptobert_sentiment(text: str, timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS) -> dict[str, Any]:
     headers = {
-        "Authorization": f"Bearer {_hf_token()}",
         "x-wait-for-model": "true",
         "Content-Type": "application/json",
     }
+    token = _hf_token()
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
     payload = {"inputs": text}
 
     try:

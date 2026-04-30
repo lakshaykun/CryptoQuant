@@ -149,43 +149,62 @@ def _fetch_events_for_symbol(
     session = requests.Session()
     session.headers.update(HEADERS)
 
+    max_posts_per_subreddit = section.get("max_posts_per_subreddit", 300)
+    try:
+        subreddit_cap = max(100, int(max_posts_per_subreddit))
+    except (TypeError, ValueError):
+        subreddit_cap = 300
+
     for sub in subreddits:
         url = f"https://www.reddit.com/r/{sub}/search.json"
-        params = {
-            "q": query,
-            "restrict_sr": "on",
-            "sort": "new",
-            "t": timeframe,
-            "limit": 100,
-        }
+        after_token: str | None = None
+        fetched_for_subreddit = 0
         try:
-            response = session.get(url, params=params, timeout=(DEFAULT_REQUEST_TIMEOUT[0], timeout_seconds))
-            if response.status_code != 200:
-                continue
-
-            data = response.json()
-            posts = data.get("data", {}).get("children", [])
-            post_data = [obj.get("data", {}) for obj in posts if isinstance(obj, dict)]
-
-            total_score = sum(to_int(post.get("score", 0)) for post in post_data)
-            total_comments = sum(to_int(post.get("num_comments", 0)) for post in post_data)
-
-            for post in post_data:
-                payload = {
-                    "id": post.get("id", ""),
-                    "timestamp": str(post.get("created_utc", "")),
-                    "source": "reddit",
-                    "text": f"{post.get('title', '')} {post.get('selftext', '')}",
-                    "engagement": _engagement_score(post, total_score, total_comments, weights),
-                    "symbol": symbol,
+            while fetched_for_subreddit < subreddit_cap:
+                page_limit = min(100, subreddit_cap - fetched_for_subreddit)
+                params = {
+                    "q": query,
+                    "restrict_sr": "on",
+                    "sort": "new",
+                    "t": timeframe,
+                    "limit": page_limit,
                 }
-                try:
-                    events.append(normalize_event(payload))
-                except ValueError:
-                    continue
+                if after_token:
+                    params["after"] = after_token
 
-            if sleep_seconds > 0:
-                time.sleep(sleep_seconds)
+                response = session.get(url, params=params, timeout=(DEFAULT_REQUEST_TIMEOUT[0], timeout_seconds))
+                if response.status_code != 200:
+                    break
+
+                data = response.json()
+                posts = data.get("data", {}).get("children", [])
+                if not posts:
+                    break
+
+                post_data = [obj.get("data", {}) for obj in posts if isinstance(obj, dict)]
+                total_score = sum(to_int(post.get("score", 0)) for post in post_data)
+                total_comments = sum(to_int(post.get("num_comments", 0)) for post in post_data)
+
+                for post in post_data:
+                    payload = {
+                        "id": post.get("id", ""),
+                        "timestamp": str(post.get("created_utc", "")),
+                        "source": "reddit",
+                        "text": f"{post.get('title', '')} {post.get('selftext', '')}",
+                        "engagement": _engagement_score(post, total_score, total_comments, weights),
+                        "symbol": symbol,
+                    }
+                    try:
+                        events.append(normalize_event(payload))
+                        fetched_for_subreddit += 1
+                    except ValueError:
+                        continue
+
+                after_token = data.get("data", {}).get("after")
+                if not after_token:
+                    break
+                if sleep_seconds > 0:
+                    time.sleep(sleep_seconds)
         except Exception as exc:
             logger.debug("Reddit fetch failed [symbol=%s sub=%s]: %s", symbol, sub, exc)
             continue

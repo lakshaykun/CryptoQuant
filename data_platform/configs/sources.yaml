@@ -1,9 +1,3 @@
-# ============================================================
-#  sources.yaml — Multi-Crypto Sentiment Source Configuration
-#  Symbols tracked: BTC, ETH, SOL, BNB, XRP
-# ============================================================
-
-# The 5 symbols the sentiment pipeline will track.
 symbols:
   - BTC
   - ETH
@@ -11,18 +5,12 @@ symbols:
   - BNB
   - XRP
 
-# ────────────────────────────────────────────────────────────
-# REDDIT
-# Each symbol gets its own dedicated set of subreddits and
-# keywords so posts are correctly tagged per coin.
-# ────────────────────────────────────────────────────────────
 reddit:
   subreddits_by_symbol:
     BTC:
       - Bitcoin
       - btc
       - BitcoinMarkets
-      - WallStreetBetsCrypto
       - CryptoCurrency
     ETH:
       - ethereum
@@ -86,7 +74,8 @@ reddit:
     upvote_ratio: 0.35
     comments: 0.20
 
-  lookback_hours: 6
+  lookback_hours: 168
+  max_posts_per_subreddit: 500
 
 # ────────────────────────────────────────────────────────────
 # YOUTUBE
@@ -139,8 +128,8 @@ youtube:
     BNB: "binance BNB"
     XRP: "ripple XRP"
 
-  max_comments_per_channel: 500
-  lookback_hours: 6
+  max_comments_per_channel: 1000
+  lookback_hours: 168
 
 # ────────────────────────────────────────────────────────────
 # TELEGRAM
@@ -198,9 +187,9 @@ telegram:
       - xrpl
       - sec
 
-  max_messages_per_channel: 500
+  max_messages_per_channel: 1000
   interval_seconds: 180
-  lookback_hours: 6
+  lookback_hours: 168
 
 # ────────────────────────────────────────────────────────────
 # NEWS
@@ -296,4 +285,5 @@ news:
     comments: 0.45
     keywords: 0.25
     recency: 0.30
-  lookback_hours: 6
+  lookback_hours: 168
+  max_entries_per_feed: 300

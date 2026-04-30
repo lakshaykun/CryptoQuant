@@ -118,7 +118,7 @@ The tree below is truncated to the directories and files that define the current
 │   │   ├── pipeline.py  # inference pipeline
 │   │   └── realtime.py  # runtime predictor
 │   ├── registry/
-│   │   ├── mlflow_registery.py  # MLflow logging
+│   │   ├── local_registry.py  # local artifact persistence
 │   │   └── model_loader.py  # local model loader
 │   ├── targets/  # target definitions
 │   └── training/
@@ -218,7 +218,7 @@ The tree below is truncated to the directories and files that define the current
 - Apache Kafka 3.7.0 for live market event transport.
 - FastAPI, Pydantic, and Uvicorn for the prediction API.
 - Pandas and NumPy for model-side feature handling and inference preprocessing.
-- XGBoost, scikit-learn, joblib, and MLflow for training, evaluation, artifact loading, and logging.
+- XGBoost, scikit-learn, and joblib for training, evaluation, and artifact loading.
 - websockets and requests for Binance live and historical ingestion.
 - PyYAML for configuration loading from `configs/*.yaml`.
 - PostgreSQL 15 with `psycopg2-binary` for the Airflow metadata database.

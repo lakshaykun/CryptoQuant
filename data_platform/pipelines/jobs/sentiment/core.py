@@ -1,17 +1,15 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import concurrent.futures
 from typing import Callable
 
 from delta.tables import DeltaTable
 from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
+from pyspark.sql.window import Window
 
-from pipelines.ingestion.streaming.sources.sentiment.news.source import fetch_news_events
-from pipelines.ingestion.streaming.sources.sentiment.reddit.source import fetch_reddit_events
 from pipelines.ingestion.streaming.sources.sentiment.shared.ingestion_state import parse_utc_timestamp
-from pipelines.ingestion.streaming.sources.sentiment.telegram.source import fetch_telegram_events
-from pipelines.ingestion.streaming.sources.sentiment.youtube.source import fetch_youtube_events
 from pipelines.jobs.sentiment.config import (
     SUPPORTED_SENTIMENT_SOURCES,
     SentimentExecutionConfig,
@@ -25,6 +23,7 @@ from pipelines.jobs.streaming.common.sentiment_state import (
 )
 from pipelines.schema.bronze.sentiment import BRONZE_SENTIMENT_SCHEMA
 from pipelines.schema.gold.sentiment import GOLD_SENTIMENT_SCHEMA
+from pipelines.schema.gold.processed_sentiment import GOLD_PROCESSED_SENTIMENT_SCHEMA
 from pipelines.schema.silver.sentiment import SILVER_SENTIMENT_SCHEMA
 from pipelines.storage.delta.utils import get_table_config
 from pipelines.storage.delta.writer import write_batch
@@ -33,39 +32,37 @@ from pipelines.transformers.silver.sentiment import SilverSentimentTransformer
 from utils.config_loader import load_config
 from utils.logger import get_logger
 from utils.spark_config import (
+    get_gold_sentiment_chunk_size,
     get_gold_sentiment_endpoint,
+    get_gold_sentiment_max_concurrent_requests,
     get_gold_sentiment_timeout_seconds,
     get_gold_watermark_seconds,
     get_gold_window_seconds,
 )
 
 logger = get_logger("sentiment_pipeline_core")
-import pytz
-
-IST = pytz.timezone("Asia/Kolkata")
-
-def convert_ist_to_utc(ts_str):
-
-    dt = datetime.fromisoformat(ts_str)
-
-    if dt.tzinfo is None:
-
-        dt = IST.localize(dt)
-
-    return dt.astimezone(timezone.utc)
 
 DATA_CONFIG = load_config("configs/data.yaml")
 WINDOW_DURATION = f"{get_gold_window_seconds(60)} seconds"
 WATERMARK_DURATION = f"{get_gold_watermark_seconds(600)} seconds"
 SENTIMENT_ENDPOINT = get_gold_sentiment_endpoint("http://127.0.0.1:8000/predict")
 SENTIMENT_TIMEOUT_SECONDS = get_gold_sentiment_timeout_seconds(10)
+SENTIMENT_MAX_CONCURRENT_REQUESTS = get_gold_sentiment_max_concurrent_requests(4)
+SENTIMENT_CHUNK_SIZE = get_gold_sentiment_chunk_size(50)
 
-SOURCE_FETCHERS: dict[str, Callable[..., list[dict]]] = {
-    "reddit": fetch_reddit_events,
-    "youtube": fetch_youtube_events,
-    "news": fetch_news_events,
-    "telegram": fetch_telegram_events,
-}
+def _get_source_fetchers() -> dict[str, Callable[..., list[dict]]]:
+    """Lazily import source fetchers so non-ingest stages don't require optional deps."""
+    from pipelines.ingestion.streaming.sources.sentiment.news.source import fetch_news_events
+    from pipelines.ingestion.streaming.sources.sentiment.reddit.source import fetch_reddit_events
+    from pipelines.ingestion.streaming.sources.sentiment.telegram.source import fetch_telegram_events
+    from pipelines.ingestion.streaming.sources.sentiment.youtube.source import fetch_youtube_events
+
+    return {
+        "reddit": fetch_reddit_events,
+        "youtube": fetch_youtube_events,
+        "news": fetch_news_events,
+        "telegram": fetch_telegram_events,
+    }
 
 
 def _table_path(table_name: str) -> str:
@@ -203,7 +200,7 @@ def _filter_events_by_window(events: list[dict], windows: dict[str, dict[str, ob
         if source_key is None:
             continue
 
-        event_time = convert_ist_to_utc(str(event.get("timestamp") or ""))
+        event_time = parse_utc_timestamp(str(event.get("timestamp") or ""))
         if event_time is None:
             continue
 
@@ -218,27 +215,39 @@ def _filter_events_by_window(events: list[dict], windows: dict[str, dict[str, ob
 
 def _fetch_events_for_windows(windows: dict[str, dict[str, object]]) -> list[dict]:
     all_events: list[dict] = []
-    for source_key, plan in windows.items():
-        fetcher = SOURCE_FETCHERS.get(source_key)
+    source_fetchers = _get_source_fetchers()
+
+    def _fetch_one(source_key: str, plan: dict[str, object]) -> list[dict]:
+        fetcher = source_fetchers.get(source_key)
         if fetcher is None:
             logger.warning("No fetcher registered for source=%s", source_key)
-            continue
+            return []
 
-        try:
-            fetched = fetcher(
-                lookback_minutes=int(plan["lookback_minutes"]),
-                emit_current_timestamp=False,
-            )
-            logger.info(
-                "Fetched source=%s rows=%d lookback_minutes=%s since=%s",
-                source_key,
-                len(fetched),
-                plan["lookback_minutes"],
-                plan["since_time"],
-            )
-            all_events.extend(fetched)
-        except Exception:
-            logger.exception("Sentiment fetch failed for source=%s", source_key)
+        fetched = fetcher(
+            lookback_minutes=int(plan["lookback_minutes"]),
+            emit_current_timestamp=False,
+        )
+        logger.info(
+            "Fetched source=%s rows=%d lookback_minutes=%s since=%s",
+            source_key,
+            len(fetched),
+            plan["lookback_minutes"],
+            plan["since_time"],
+        )
+        return fetched
+
+    max_workers = max(1, min(len(windows), 4))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as pool:
+        future_to_source = {
+            pool.submit(_fetch_one, source_key, plan): source_key
+            for source_key, plan in windows.items()
+        }
+        for future in concurrent.futures.as_completed(future_to_source):
+            source_key = future_to_source[future]
+            try:
+                all_events.extend(future.result())
+            except Exception:
+                logger.exception("Sentiment fetch failed for source=%s", source_key)
 
     return _filter_events_by_window(all_events, windows)
 
@@ -342,7 +351,7 @@ def run_silver(spark, execution_mode: str) -> int:
     return silver_df.count()
 
 
-def run_gold(spark, execution_mode: str) -> int:
+def run_gold(spark, execution_mode: str, reprocess: bool = False) -> int:
     config = load_sentiment_pipeline_config(execution_mode)
     silver_path = _table_path(config.silver_table)
     if not DeltaTable.isDeltaTable(spark, silver_path):
@@ -350,21 +359,35 @@ def run_gold(spark, execution_mode: str) -> int:
         return 0
 
     silver_df = spark.read.format("delta").load(silver_path)
-    silver_df = _filter_incremental(silver_df, spark, layer=config.gold_state_layer)
+    if reprocess:
+        logger.info("Gold stage reprocess enabled; skipping incremental state filter for mode=%s", execution_mode)
+    else:
+        silver_df = _filter_incremental(silver_df, spark, layer=config.gold_state_layer)
 
     if _is_empty(silver_df):
-        logger.info("No new sentiment rows for gold mode=%s", execution_mode)
+        logger.info(
+            "No new sentiment rows for gold mode=%s reprocess=%s layer=%s",
+            execution_mode,
+            reprocess,
+            config.gold_state_layer,
+        )
         return 0
 
     client = CryptoBertClient(endpoint=SENTIMENT_ENDPOINT, timeout_seconds=SENTIMENT_TIMEOUT_SECONDS)
-    scored_df = score_sentiment_dataframe(silver_df, client=client)
+    scored_df = score_sentiment_dataframe(
+        silver_df,
+        client=client,
+        max_concurrent_requests=SENTIMENT_MAX_CONCURRENT_REQUESTS,
+        chunk_size=SENTIMENT_CHUNK_SIZE,
+    )
     if _is_empty(scored_df):
         logger.info("No scored sentiment rows for gold mode=%s", execution_mode)
         return 0
 
+    window_duration = f"{config.gold_window_seconds} seconds"
     gold_df = GoldSentimentTransformer.transform(
         scored_df,
-        window_duration=WINDOW_DURATION,
+        window_duration=window_duration,
         watermark_duration=WATERMARK_DURATION,
     )
     if _is_empty(gold_df):
@@ -393,6 +416,88 @@ def run_gold(spark, execution_mode: str) -> int:
     gold_state_rows = silver_df.select("source", "symbol", "event_time")
     upsert_sentiment_state(gold_state_rows, layer=config.gold_state_layer)
     return flattened_gold.count()
+
+
+def run_gold_processed(spark, execution_mode: str) -> int:
+    config = load_sentiment_pipeline_config(execution_mode)
+    gold_path = _table_path(config.gold_table)
+    processed_table = f"{config.gold_table}_processed"
+    processed_layer = f"{config.gold_state_layer}_processed"
+
+    if not DeltaTable.isDeltaTable(spark, gold_path):
+        logger.info("Gold sentiment table missing at %s", gold_path)
+        return 0
+
+    gold_df = spark.read.format("delta").load(gold_path)
+    if _is_empty(gold_df):
+        logger.info("No rows in gold sentiment table for mode=%s", execution_mode)
+        return 0
+
+    step_expr = f"INTERVAL {int(config.gold_window_seconds)} SECONDS"
+    bounds = gold_df.groupBy("symbol").agg(
+        F.min("window_start").alias("min_window_start"),
+        F.max("window_start").alias("max_window_start"),
+    )
+    continuous_windows = bounds.select(
+        "symbol",
+        F.explode(F.expr(f"sequence(min_window_start, max_window_start, {step_expr})")).alias("window_start_time"),
+    )
+
+    observed = (
+        gold_df.withColumn("window_start_time", F.col("window_start"))
+        .groupBy("symbol", "window_start_time")
+        .agg(F.avg("sentiment_index").alias("aggregated_sentiment"))
+    )
+
+    filled = (
+        continuous_windows.alias("w")
+        .join(observed.alias("o"), on=["symbol", "window_start_time"], how="left")
+        .withColumn("observed_sentiment", F.col("aggregated_sentiment"))
+    )
+
+    history_window = (
+        Window.partitionBy("symbol")
+        .orderBy("window_start_time")
+        .rowsBetween(Window.unboundedPreceding, Window.currentRow)
+    )
+
+    # Weighted trailing average provides stable EMA-like fill without full-table UDF scans.
+    ema_filled = (
+        filled.withColumn(
+            "history_sentiments",
+            F.filter(F.collect_list("observed_sentiment").over(history_window), lambda x: x.isNotNull()),
+        )
+        .withColumn(
+            "ema_from_history",
+            F.expr(
+                "aggregate(history_sentiments, named_struct('v', cast(0.0 as double), 'init', false), "
+                "(acc, x) -> named_struct('v', CASE WHEN acc.init THEN (0.4 * x) + (0.6 * acc.v) ELSE x END, 'init', true), "
+                "acc -> CASE WHEN acc.init THEN acc.v ELSE cast(null as double) END)"
+            ),
+        )
+        .withColumn("aggregated_sentiment", F.coalesce(F.col("observed_sentiment"), F.col("ema_from_history"), F.lit(0.0)))
+        .withColumn("ema_filled_flag", F.col("observed_sentiment").isNull())
+        .withColumn("date", F.to_date("window_start_time"))
+        .select("symbol", "window_start_time", "aggregated_sentiment", "ema_filled_flag", "date")
+    )
+
+    write_batch(
+        ema_filled,
+        processed_table,
+        GOLD_PROCESSED_SENTIMENT_SCHEMA,
+        upsert=False,
+        optimize_partitions=True,
+    )
+
+    state_rows = (
+        ema_filled.select(
+            F.lit("gold_processed").alias("source"),
+            "symbol",
+            F.col("window_start_time").alias("event_time"),
+        )
+    )
+    upsert_sentiment_state(state_rows, layer=processed_layer)
+    return int(ema_filled.count())
 
 
 def validate_source(source: str) -> str:

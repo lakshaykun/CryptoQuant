@@ -135,9 +135,8 @@ def _fetch_channel_comments(
 
         engagement = comment_like_count + reply_count
 
-        # Optional: skip low-quality comments
         if engagement == 0:
-            continue
+            engagement = 1
 
         payload = {
             "id": item.get("id", ""),

@@ -1,10 +1,27 @@
 from datetime import datetime
+import logging
 
 from airflow import DAG
 from airflow.operators.bash import BashOperator
 from pipelines.jobs.sentiment.config import load_sentiment_pipeline_config
 
-CONFIG = load_sentiment_pipeline_config("streaming")
+
+logger = logging.getLogger(__name__)
+
+
+def _load_sources() -> list[str]:
+    try:
+        config = load_sentiment_pipeline_config("streaming")
+        sources = list(config.sources)
+        if not sources:
+            raise ValueError("empty sources from config")
+        return sources
+    except Exception:
+        logger.exception("Failed to load sentiment streaming config during DAG parse; using fallback sources")
+        return ["telegram", "youtube", "reddit", "news"]
+
+
+SOURCES = _load_sources()
 
 
 def build_python_job(module: str, args: str = "") -> str:
@@ -30,7 +47,7 @@ with DAG(
         ),
     )
     ingest_tasks = []
-    for source in CONFIG.sources:
+    for source in SOURCES:
         ingest_tasks.append(
             BashOperator(
                 task_id=f"ingest_{source}_streaming",

@@ -31,8 +31,8 @@ SCORED_SENTIMENT_SCHEMA = StructType([
 def score_sentiment_dataframe(
     df: DataFrame,
     client: CryptoBertClient,
-    max_concurrent_requests: int = 20,
-    chunk_size: int = 200,
+    max_concurrent_requests: int = 2,
+    chunk_size: int = 25,
 ) -> DataFrame:
     if df is None or df.rdd.isEmpty():
         return df.sparkSession.createDataFrame([], SCORED_SENTIMENT_SCHEMA)

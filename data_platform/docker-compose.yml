@@ -93,7 +93,6 @@ services:
     depends_on:
       - spark
       - postgres
-      - mlflow
     ports:
       - "8080:8080"
     environment:
@@ -144,42 +143,20 @@ services:
   # 🔴 MODEL SERVER
   # =========================
   model_server:
+    env_file:
+      - ../.env
     build:
-      dockerfile: docker/airflow/Dockerfile
-    container_name: model-server
-    working_dir: /opt/app
-    user: "0:0"
-    depends_on:
-      - spark
-      - kafka
+      context: .
+      dockerfile: docker/model_server.Dockerfile
+    container_name: model_server
     ports:
       - "8000:8000"
     environment:
-      - PYTHONPATH=/opt/app
+      - PYTHONPATH=/app
     volumes:
-      - .:/opt/app
-    command: >
-      sh -c "pip install --no-cache-dir fastapi uvicorn &&
-             python3 -m uvicorn api.app:app --host 0.0.0.0 --port 8000"
-  
-  # =========================
-  # 🟢 MLFLOW
-  # =========================
-  mlflow:
-    image: ghcr.io/mlflow/mlflow:latest
-    container_name: mlflow
-    ports:
-      - "5001:5000"
-    environment:
-      - MLFLOW_SERVER_ALLOWED_HOSTS=*
-    command: >
-      mlflow server
-      --backend-store-uri sqlite:///mlflow.db
-      --default-artifact-root /mlflow/artifacts
-      --host 0.0.0.0
-      --port 5000
-    volumes:
-      - mlflow-data:/mlflow
+      - .:/app
+    depends_on:
+      - kafka
 
 # =========================
 # 📦 VOLUMES
@@ -190,4 +167,3 @@ volumes:
   airflow-home:
   spark-ivy:
   airflow-logs:
-  mlflow-data:

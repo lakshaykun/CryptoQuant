@@ -23,6 +23,8 @@ DEFAULT_SPARK_CONFIG: dict[str, Any] = {
 		"cron_minutes": 5,
 		"sentiment_endpoint": "http://127.0.0.1:8000/predict",
 		"sentiment_timeout_seconds": 10,
+		"sentiment_max_concurrent_requests": 4,
+		"sentiment_chunk_size": 50,
 	},
 	"delta": {
 		"bronze": "delta/bronze",
@@ -145,6 +147,24 @@ def get_gold_sentiment_timeout_seconds(default: int = 10) -> int:
 	try:
 		seconds = int(value)
 		return seconds if seconds > 0 else default
+	except (TypeError, ValueError):
+		return default
+
+
+def get_gold_sentiment_max_concurrent_requests(default: int = 4) -> int:
+	value = _section("gold").get("sentiment_max_concurrent_requests", default)
+	try:
+		count = int(value)
+		return count if count > 0 else default
+	except (TypeError, ValueError):
+		return default
+
+
+def get_gold_sentiment_chunk_size(default: int = 50) -> int:
+	value = _section("gold").get("sentiment_chunk_size", default)
+	try:
+		size = int(value)
+		return size if size > 0 else default
 	except (TypeError, ValueError):
 		return default
 

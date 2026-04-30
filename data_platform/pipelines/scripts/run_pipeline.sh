@@ -365,14 +365,21 @@ stop_stage() {
     echo "Stopping stage '${label}' (PID ${pid})"
     kill "${pid}" || true
     sleep 2
+
     if kill -0 "${pid}" 2>/dev/null; then
+      echo "Force killing stage '${label}'"
       kill -9 "${pid}" || true
     fi
   fi
 
+  if [[ "${label}" == "cryptobert_api" ]]; then
+    echo "Cleaning FastAPI processes..."
+    pkill -f "uvicorn" || true
+    pkill -f "api.app" || true
+  fi
+
   rm -f "${pidfile}"
 }
-
 stop_individual_process() {
   local label="$1"
   if ! is_valid_stage "${label}"; then
@@ -392,15 +399,19 @@ stop_combined_process() {
 
 cleanup_orphan_stage_processes() {
   local patterns=(
-    "uvicorn api.app:app"
-    "pipelines.jobs.streaming.bronze.kafka_to_delta"
-    "pipelines.jobs.streaming.silver.clean_merge_stream"
-    "pipelines.jobs.streaming.gold.sentiment_enrichment"
-    "pipelines.ingestion.streaming.sentiment.reddit_stream_job"
-    "pipelines.ingestion.streaming.sentiment.youtube_stream_job"
-    "pipelines.ingestion.streaming.sentiment.news_stream_job"
-    "pipelines.ingestion.streaming.sentiment.telegram_stream_job"
-  )
+  "uvicorn api.app:app"
+  "uvicorn"
+  "fastapi"
+  "api.app"
+  "run_api.sh"
+  "pipelines.jobs.streaming.bronze.kafka_to_delta"
+  "pipelines.jobs.streaming.silver.clean_merge_stream"
+  "pipelines.jobs.streaming.gold.sentiment_enrichment"
+  "pipelines.ingestion.streaming.sentiment.reddit_stream_job"
+  "pipelines.ingestion.streaming.sentiment.youtube_stream_job"
+  "pipelines.ingestion.streaming.sentiment.news_stream_job"
+  "pipelines.ingestion.streaming.sentiment.telegram_stream_job"
+)
 
   local found=0
   local pattern
@@ -520,6 +531,10 @@ stop_pipeline() {
   cleanup_orphan_stage_processes
 
   if [[ "${target}" == "all" ]]; then
+    echo "Stopping FastAPI container..."
+    docker stop model_server >/dev/null 2>&1 || true
+    docker stop cryptoquant-reddit_producer-1
+
     echo "Stopping Kafka services..."
     docker compose -f "${COMPOSE_FILE}" stop topic-init kafka >/dev/null 2>&1 || true
   fi

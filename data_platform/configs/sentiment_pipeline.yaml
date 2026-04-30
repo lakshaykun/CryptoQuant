@@ -1,11 +1,11 @@
 batch:
-  start_date: "2026-04-26T00:00:00Z"
+  start_date: "2026-04-01T00:00:00Z"
   sources:
     - telegram
     - youtube
     - reddit
     - news
-  fallback_lookback_minutes: 1440
+  fallback_lookback_minutes: 43200
   bronze_table: "bronze_sentiment"
   silver_table: "silver_sentiment"
   gold_table: "gold_sentiment"
@@ -14,7 +14,7 @@ batch:
   gold_state_layer: "batch_gold"
 
 streaming:
-  lookback_minutes: 30
+  lookback_minutes: 360
   sources:
     - telegram
     - youtube
@@ -27,8 +27,10 @@ streaming:
   silver_state_layer: "streaming_silver"
   gold_state_layer: "streaming_gold"
 
-query_safety_buffer_minutes: 2
-min_lookback_minutes: 1
+query_safety_buffer_minutes: 15
+min_lookback_minutes: 30
+gold:
+  window_seconds: 300
 source_aliases:
   telegram:
     - telegram

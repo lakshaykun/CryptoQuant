@@ -25,7 +25,9 @@ from pipelines.transformers.gold.sentiment import GoldSentimentTransformer
 from utils.config_loader import load_config
 from utils.spark_config import (
     get_checkpoint_path,
+    get_gold_sentiment_chunk_size,
     get_gold_sentiment_endpoint,
+    get_gold_sentiment_max_concurrent_requests,
     get_gold_sentiment_timeout_seconds,
     get_gold_trigger_seconds,
     get_gold_watermark_seconds,
@@ -47,8 +49,10 @@ GOLD_WINDOW_DURATION = f"{GOLD_WINDOW_SECONDS} seconds"
 GOLD_WATERMARK_SECONDS = get_gold_watermark_seconds(600)
 GOLD_WATERMARK_DURATION = f"{GOLD_WATERMARK_SECONDS} seconds"
 GOLD_TRIGGER_SECONDS = get_gold_trigger_seconds(5)
-GOLD_SENTIMENT_ENDPOINT = get_gold_sentiment_endpoint("http://127.0.0.1:8000/predict")
+GOLD_SENTIMENT_ENDPOINT = get_gold_sentiment_endpoint("http://host.docker.internal:8000/predict")
 GOLD_SENTIMENT_TIMEOUT_SECONDS = get_gold_sentiment_timeout_seconds(10)
+GOLD_SENTIMENT_MAX_CONCURRENT_REQUESTS = get_gold_sentiment_max_concurrent_requests(4)
+GOLD_SENTIMENT_CHUNK_SIZE = get_gold_sentiment_chunk_size(50)
 APP_NAME = f"{get_spark_app_name()}-gold"
 GOLD_REALTIME_CSV_PATH = str((Path(GOLD_DELTA_PATH).parent / "gold_sentiment_realtime.csv").resolve())
 EMA_LOOKBACK = 10
@@ -388,7 +392,12 @@ def process_gold_batch(batch_df, epoch_id: int) -> None:
                 endpoint=GOLD_SENTIMENT_ENDPOINT,
                 timeout_seconds=GOLD_SENTIMENT_TIMEOUT_SECONDS,
             )
-            scored_batch = score_sentiment_dataframe(batch_df, client=client)
+            scored_batch = score_sentiment_dataframe(
+                batch_df,
+                client=client,
+                max_concurrent_requests=GOLD_SENTIMENT_MAX_CONCURRENT_REQUESTS,
+                chunk_size=GOLD_SENTIMENT_CHUNK_SIZE,
+            )
             aggregated_raw = GoldSentimentTransformer.transform(
                 scored_batch,
                 window_duration=GOLD_WINDOW_DURATION,

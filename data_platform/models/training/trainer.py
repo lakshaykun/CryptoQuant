@@ -8,9 +8,7 @@ from catboost import CatBoostRegressor
 import lightgbm as lgb
 from sklearn.svm import SVR
 import pandas as pd
-from models.registry.mlflow_registery import (
-    log_scaler, start_run, log_params, log_metrics, log_model, register_model
-)
+from models.registry.local_registry import save_metrics, save_model, save_scaler
 
 class ModelInfo:
     def __init__(self, name, train_func, params_config):
@@ -63,37 +61,34 @@ class Trainer:
 
 
         best_score = float("inf")
-        best_run_id = None
         best_model_name = None
+        best_model = None
+        best_metrics: dict[str, float] = {}
+        leaderboard: list[dict[str, float | str]] = []
 
         for model_info in self.models:
             self.logger.info(f"Training {model_info.name} with params: {model_info.params}")
             try:
-                with start_run(run_name=model_info.name) as run:
-                    log_params({
-                        "model_name": model_info.name,
-                        **model_info.params
-                    })
+                model = model_info.train_func(X_train, y_train, X_test, y_test, model_info.params)
+                results = evaluate_model(model, X_test, y_test)
+                score = results["rmse"]
+                leaderboard.append({"model_name": model_info.name, **{k: float(v) for k, v in results.items()}})
 
-                    model = model_info.train_func(X_train, y_train, X_test, y_test, model_info.params)
-
-                    results = evaluate_model(model, X_test, y_test)
-
-                    log_metrics(results)
-
-                    score = results["rmse"]
-
-                    if score < best_score:
-                        best_score = score
-                        best_run_id = run.info.run_id
-                        best_model_name = model_info.name
-
-                    log_model(model, model_info.name, "v1")
-            except:
+                if score < best_score:
+                    best_score = score
+                    best_model_name = model_info.name
+                    best_model = model
+                    best_metrics = {k: float(v) for k, v in results.items()}
+            except Exception:
                 self.logger.error(f"Error training {model_info.name}", exc_info=True)
-        
-        log_scaler(scaler)
-        register_model(best_run_id, best_model_name)
+
+        if best_model is None or best_model_name is None:
+            raise RuntimeError("No model trained successfully")
+
+        save_scaler(scaler)
+        save_model(best_model, best_model_name)
+        save_metrics(best_metrics, leaderboard)
+        self.logger.info("Saved best model locally: model=%s rmse=%.6f", best_model_name, best_score)
 
     # Training functions for each model type
     def _train_xgboost(self, X_train, y_train, X_test, y_test, params):

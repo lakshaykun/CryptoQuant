@@ -10,7 +10,7 @@ This package contains the machine learning lifecycle: feature definitions, data 
 - [training/](training/) - training pipeline and trainer implementation.
 - [evaluation/](evaluation/) - metrics and backtesting helpers.
 - [inference/](inference/) - batch and real-time prediction wrappers.
-- [registry/](registry/) - local model loading and MLflow logging.
+- [registry/](registry/) - local model loading and local artifact persistence.
 - [targets/](targets/) - target generation definitions.
 
 ## Lifecycle
