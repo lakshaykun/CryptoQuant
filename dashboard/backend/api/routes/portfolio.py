@@ -12,7 +12,6 @@ from dashboard.backend.schemas.portfolio import (
     PositionCreate, PositionUpdate, PositionResponse, PositionWithPnL,
     RiskItem, RiskResponse, ScoreItem, SuggestionItem
 )
-
 router = APIRouter()
 
 # ----------------- PORTFOLIO CRUD -----------------
@@ -301,7 +300,7 @@ async def get_scores(
             COALESCE(s.sentiment_index, 1.0) AS sentiment_index
         FROM latest_market m
         JOIN latest_predictions p ON m.symbol = p.symbol
-        LEFT JOIN latest_sentiment s ON m.symbol = s.symbol
+        LEFT JOIN latest_sentiment s ON UPPER(s.symbol) = UPPER(REPLACE(m.symbol, 'USDT', ''))
         """)
 
     scores = []
@@ -366,7 +365,7 @@ async def get_suggestions(
             COALESCE(s.sentiment_index, 1.0) AS sentiment_index
         FROM latest_market m
         JOIN latest_predictions p ON m.symbol = p.symbol
-        LEFT JOIN latest_sentiment s ON m.symbol = s.symbol
+        LEFT JOIN latest_sentiment s ON UPPER(s.symbol) = UPPER(REPLACE(m.symbol, 'USDT', ''))
         """)
 
     # Compute current weights

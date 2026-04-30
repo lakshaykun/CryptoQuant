@@ -40,13 +40,11 @@ services:
       context: .
       dockerfile: delta_sync/sentiment/Dockerfile
     container_name: crypto-delta-sentiment-sync
-    depends_on:
-      - timescaledb
     env_file:
       - .env
     volumes:
-      - ${GOLD_SENTIMENT_PATH}:${GOLD_SENTIMENT_PATH}
-      - ${SILVER_SENTIMENT_PATH}:${SILVER_SENTIMENT_PATH}
+      - ${GOLD_SENTIMENT_PATH}:${GOLD_SENTIMENT_PATH_LOCAL}
+      - ${SILVER_SENTIMENT_PATH}:${SILVER_SENTIMENT_PATH_LOCAL}
 
   dashboard-api:
     build:

@@ -36,7 +36,12 @@ def read_gold_incremental(
     try:
         df = DeltaTable(get_gold_path()).to_pandas()
         df = df[GOLD_COLUMNS]
-        df = df[df["window_start"] > pd.Timestamp(last_synced_time, tz="UTC")]
+        # Ensure last_synced_time is timezone-naive before localizing, or convert if already tz-aware
+        if last_synced_time.tzinfo is not None:
+            ts = pd.Timestamp(last_synced_time).tz_convert("UTC")
+        else:
+            ts = pd.Timestamp(last_synced_time).tz_localize("UTC")
+        df = df[df["window_start"] > ts]
         if symbols:
             df = df[df["symbol"].isin(symbols)]
         logger.info(f"[sentiment/reader] Gold incremental read → {len(df)} rows")
@@ -66,7 +71,12 @@ def read_silver_incremental(
     try:
         df = DeltaTable(get_silver_path()).to_pandas()
         df = df[SILVER_COLUMNS]
-        df = df[df["event_time"] > pd.Timestamp(last_synced_time, tz="UTC")]
+        # Ensure last_synced_time is timezone-naive before localizing, or convert if already tz-aware
+        if last_synced_time.tzinfo is not None:
+            ts = pd.Timestamp(last_synced_time).tz_convert("UTC")
+        else:
+            ts = pd.Timestamp(last_synced_time).tz_localize("UTC")
+        df = df[df["event_time"] > ts]
         if symbols:
             df = df[df["symbol"].isin(symbols)]
         logger.info(f"[sentiment/reader] Silver incremental read → {len(df)} rows")

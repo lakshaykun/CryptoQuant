@@ -38,7 +38,7 @@ async def get_candles(
         SELECT
             open_time, open, high, low, close, volume, trades, ma_5, ma_20
         FROM {table}
-        WHERE symbol = $1
+        WHERE UPPER(symbol) = UPPER($1)
           AND is_valid_feature_row = TRUE
           AND ($2::timestamptz IS NULL OR open_time >= $2)
           AND ($3::timestamptz IS NULL OR open_time <= $3)
