@@ -182,7 +182,7 @@ async def get_microstructure(
                         AVG(log_return) AS avg_return,
                         AVG(volume)     AS avg_volume
                     FROM market
-                    WHERE symbol = $1
+                    WHERE UPPER(symbol) = UPPER($1)
                       AND is_valid_feature_row = TRUE
                       AND ($2::timestamptz IS NULL OR open_time >= $2)
                       AND ($3::timestamptz IS NULL OR open_time <= $3)

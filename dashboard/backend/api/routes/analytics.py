@@ -2,6 +2,7 @@ from fastapi import APIRouter, Query, HTTPException, Depends
 import asyncpg
 from dashboard.backend.db.session import get_conn
 from dashboard.backend.schemas.sentiment import SentimentCorrelation
+from dashboard.backend.api.symbols import to_sentiment_symbol
 from fastapi_cache.decorator import cache
 import pandas as pd
 
@@ -20,6 +21,7 @@ async def get_sentiment_correlation(
     Negative lag = sentiment leads price.
     Positive lag = sentiment lags price.
     """
+    sentiment_symbol = to_sentiment_symbol(symbol)
     try:
         async with pool.acquire() as conn:
             # fetch aligned sentiment + returns on the same time axis
@@ -30,14 +32,14 @@ async def get_sentiment_correlation(
                     m.log_return
                 FROM sentiment_gold s
                 JOIN market m
-                  ON s.symbol      = m.symbol
+                  ON UPPER(m.symbol) = UPPER(s.symbol || 'USDT')
                  AND s.window_start = m.open_time
-                WHERE s.symbol = $1
+                WHERE UPPER(s.symbol) = UPPER($1)
                   AND s.sentiment_index IS NOT NULL
                   AND m.log_return      IS NOT NULL
                   AND m.is_valid_feature_row = TRUE
                 ORDER BY s.window_start ASC
-            """, symbol.upper())
+            """, sentiment_symbol)
 
         if not rows or len(rows) < max_lag * 2:
             raise HTTPException(status_code=404, detail=f"Not enough data for correlation on {symbol}")
