@@ -45,7 +45,12 @@ def read_incremental(
         table = DeltaTable(get_gold_path())
         df = table.to_pandas()
 
-        df = df[df["open_time"] > pd.Timestamp(last_synced_time, tz="UTC")]
+        if last_synced_time.tzinfo is not None:
+            ts = pd.Timestamp(last_synced_time).tz_convert("UTC")
+        else:
+            ts = pd.Timestamp(last_synced_time).tz_localize("UTC")
+
+        df = df[df["open_time"] > ts]
 
         if symbols:
             df = df[df["symbol"].isin(symbols)]
@@ -78,7 +83,11 @@ def read_predictions_incremental(
     try:
         table = DeltaTable(get_predictions_path())
         df = table.to_pandas()
-        df = df[df["open_time"] > pd.Timestamp(last_synced_time, tz="UTC")]
+        if last_synced_time.tzinfo is not None:
+            ts = pd.Timestamp(last_synced_time).tz_convert("UTC")
+        else:            
+            ts = pd.Timestamp(last_synced_time).tz_localize("UTC")
+        df = df[df["open_time"] > ts]
         if symbols:
             df = df[df["symbol"].isin(symbols)]
         logger.info(f"[reader] Predictions incremental read from {last_synced_time} → {len(df)} rows")

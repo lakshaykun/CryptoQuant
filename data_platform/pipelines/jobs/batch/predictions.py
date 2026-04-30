@@ -14,7 +14,7 @@ from utils_global.logger import get_logger
 
 
 PREDICTIONS_BATCH_SCHEMA = StructType(
-    [field for field in PREDICTIONS_LOG_RETURN_LEAD1_SCHEMA.fields if field.name != "ingestion_time"]
+    [field for field in PREDICTIONS_LOG_RETURN_LEAD1_SCHEMA.fields if field.name not in ["ingestion_time", "prediction"]]
 )
 
 PREDICTIONS_BATCH_COLUMNS = [field.name for field in PREDICTIONS_BATCH_SCHEMA.fields]
@@ -97,7 +97,9 @@ def main(df=None):
         if predicted_df is None or predicted_df.rdd.isEmpty():
             logger.info("Prediction batch was empty, skipping write")
             return
-
+        
+        predicted_df = predicted_df.withColumn("prediction", F.col("return_short"))
+        
         write_batch(
             predicted_df,
             "predictions_log_return_lead1",
